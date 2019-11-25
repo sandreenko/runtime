@@ -13,6 +13,7 @@ class ICorJitHost;
 class JitConfigValues
 {
 public:
+    friend class Compiler;
     class MethodSet
     {
     private:

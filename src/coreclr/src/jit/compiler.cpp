@@ -6136,6 +6136,15 @@ int Compiler::compCompileHelper(CORINFO_MODULE_HANDLE            classPtr,
         }
     }
 
+    if (Compiler::jitTotalMethodCompiled == 3)
+    {
+        JitConfig.m_JitStress = 1;
+    }
+    else
+    {
+        JitConfig.m_JitStress = 0;
+    }
+
 #ifdef DEBUG
     if (JitConfig.DumpJittedMethods() == 1 && !compIsForInlining())
     {
