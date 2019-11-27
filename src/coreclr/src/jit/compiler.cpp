@@ -3683,7 +3683,7 @@ const LPCWSTR Compiler::s_compStressModeNames[STRESS_COUNT + 1] = {
 bool Compiler::compStressCompile(compStressArea stressArea, unsigned weight)
 {
     unsigned hash;
-    DWORD    stressLevel;
+    DWORD    stressLevel = 0;
 
     if (!bRangeAllowStress)
     {
@@ -3697,7 +3697,7 @@ bool Compiler::compStressCompile(compStressArea stressArea, unsigned weight)
     }
 
     bool         doStress = false;
-    const WCHAR* strStressModeNames;
+    const WCHAR* strStressModeNames = nullptr;
 
     // Does user explicitly prevent using this STRESS_MODE through the command line?
     const WCHAR* strStressModeNamesNot = JitConfig.JitStressModeNamesNot();
@@ -3768,9 +3768,10 @@ _done:
 
     if (doStress && !compActiveStressModes[stressArea])
     {
-        if (verbose)
+        //if (verbose)
         {
             printf("\n\n*** JitStress: %ws ***\n\n", s_compStressModeNames[stressArea]);
+            printf("JitStress %d, strStressModeNames %s \n", stressLevel, strStressModeNames);
         }
         compActiveStressModes[stressArea] = 1;
     }
@@ -5855,6 +5856,21 @@ int Compiler::compCompileHelper(CORINFO_MODULE_HANDLE            classPtr,
 #endif
     }
 
+
+    if (!compIsForInlining())
+    {
+        if (Compiler::jitTotalMethodCompiled == 4)
+        {
+            printf("%d set m_JitStress==1\n", Compiler::jitTotalMethodCompiled);
+            JitConfig.m_JitStress = 1;
+        }
+        else
+        {
+            printf("%d set m_JitStress==0\n", Compiler::jitTotalMethodCompiled);
+            JitConfig.m_JitStress = 0;
+        }
+    }
+
     // compInitOptions will set the correct verbose flag.
 
     compInitOptions(compileFlags);
@@ -6136,14 +6152,6 @@ int Compiler::compCompileHelper(CORINFO_MODULE_HANDLE            classPtr,
         }
     }
 
-    if (Compiler::jitTotalMethodCompiled == 3)
-    {
-        JitConfig.m_JitStress = 1;
-    }
-    else
-    {
-        JitConfig.m_JitStress = 0;
-    }
 
 #ifdef DEBUG
     if (JitConfig.DumpJittedMethods() == 1 && !compIsForInlining())
