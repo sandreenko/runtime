@@ -5432,10 +5432,21 @@ regMaskTP CodeGen::genJmpCallArgMask()
     regMaskTP argMask = RBM_NONE;
     for (unsigned varNum = 0; varNum < compiler->info.compArgsCount; ++varNum)
     {
-        const LclVarDsc& desc = compiler->lvaTable[varNum];
-        if (desc.lvIsRegArg)
+        const LclVarDsc* desc = compiler->lvaGetDesc(varNum);
+        if (desc->lvIsRegArg)
         {
-            argMask |= genRegMask(desc.GetArgReg());
+            argMask |= genRegMask(desc->GetArgReg());
+            printf("exclusing argReg for %d, %d\n", varNum, desc->GetArgReg());
+            if (varTypeIsMultiReg(desc))
+            {
+                assert(desc->GetOtherArgReg() != REG_STK);
+                argMask |= genRegMask(desc->GetOtherArgReg());
+                printf("exclusing the other argReg for %d, %d\n", varNum, desc->GetOtherArgReg());
+            }
+            else
+            {
+                printf("not multi reg\n");
+            }
         }
     }
     return argMask;
@@ -5450,6 +5461,7 @@ regMaskTP CodeGen::genJmpCallArgMask()
 
 void CodeGen::genFreeLclFrame(unsigned frameSize, /* IN OUT */ bool* pUnwindStarted, bool jmpEpilog)
 {
+    printf("genFreeLclFrame %d\n", jmpEpilog);
     assert(compiler->compGeneratingEpilog);
 
     if (frameSize == 0)
@@ -5484,7 +5496,14 @@ void CodeGen::genFreeLclFrame(unsigned frameSize, /* IN OUT */ bool* pUnwindStar
             // Do not use argument registers as scratch registers in the jmp epilog.
             grabMask &= ~genJmpCallArgMask();
         }
-        regNumber tmpReg = REG_TMP_0;
+        else
+        {
+            grabMask &= ~RBM_LNGRET; // being conservative here.
+        }
+        assert(grabMask != RBM_NONE);
+        regMaskTP regMask = genFindLowestBit(grabMask);
+        regNumber tmpReg = genRegNumFromMask(regMask);
+        printf("assigned reg %d\n", tmpReg);
         instGen_Set_Reg_To_Imm(EA_PTRSIZE, tmpReg, frameSize);
         if (*pUnwindStarted)
         {
@@ -7898,6 +7917,7 @@ void CodeGen::genFnEpilog(BasicBlock* block)
 #endif // DEBUG
 
     bool jmpEpilog = ((block->bbFlags & BBF_HAS_JMP) != 0);
+    printf("genFnEpilog %d\n", jmpEpilog);
 
     GenTree* lastNode = block->lastNode();
 
@@ -7947,6 +7967,7 @@ void CodeGen::genFnEpilog(BasicBlock* block)
         genStackAllocRegisterMask(compiler->compLclFrameSize, regSet.rsGetModifiedRegsMask() & RBM_FLT_CALLEE_SAVED) ==
             RBM_NONE)
     {
+        printf("genFreeLclFrame\n");
         genFreeLclFrame(compiler->compLclFrameSize, &unwindStarted, jmpEpilog);
     }
 
@@ -7979,8 +8000,8 @@ void CodeGen::genFnEpilog(BasicBlock* block)
         GetEmitter()->emitIns_R_R(INS_mov, EA_PTRSIZE, vptrReg1, indCallReg);
         GetEmitter()->emitIns_R_R_I(INS_ldr, EA_PTRSIZE, indCallReg, indCallReg, 0);
         GetEmitter()->emitIns_R_R(INS_add, EA_PTRSIZE, indCallReg, vptrReg1);
-    }
-
+        }
+    printf("genPopCalleeSavedRegisters\n");
     genPopCalleeSavedRegisters(jmpEpilog);
 
     if (regSet.rsMaskPreSpillRegs(true) != RBM_NONE)
