@@ -1395,7 +1395,7 @@ int LinearScan::BuildBlockStore(GenTreeBlk* blkNode)
         if ((srcAddrOrFill == nullptr) && (srcRegMask != RBM_NONE))
         {
             // This is a local source; we'll use a temp register for its address.
-            assert(src->isContained() && src->OperIs(GT_LCL_VAR, GT_LCL_FLD));
+            assert(src->isContained() && src->OperIs(GT_LCL_VAR, GT_LCL_FLD, GT_SIMD));
             buildInternalIntRegisterDefForNode(blkNode, srcRegMask);
         }
     }

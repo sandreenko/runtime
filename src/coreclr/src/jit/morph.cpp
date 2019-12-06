@@ -8670,9 +8670,11 @@ GenTree* Compiler::fgMorphOneAsgBlockOp(GenTree* tree)
     unsigned             size   = 0;
     CORINFO_CLASS_HANDLE clsHnd = NO_CLASS_HANDLE;
 
-    if (dest->gtEffectiveVal()->OperIsBlk())
+    auto effVal = dest->gtEffectiveVal();
+
+    if (effVal->OperIsBlk())
     {
-        GenTreeBlk* lhsBlk = dest->gtEffectiveVal()->AsBlk();
+        GenTreeBlk* lhsBlk = effVal->AsBlk();
         size               = lhsBlk->Size();
         if (impIsAddressInLocal(lhsBlk->Addr(), &destLclVarTree))
         {
@@ -9567,7 +9569,8 @@ GenTree* Compiler::fgMorphBlockOperand(GenTree* tree, var_types asgType, unsigne
 {
     GenTree* effectiveVal = tree->gtEffectiveVal();
 
-    if (asgType != TYP_STRUCT)
+    if (!varTypeIsStruct(asgType))
+    //if (asgType != TYP_STRUCT)
     {
         if (effectiveVal->OperIsIndir())
         {
@@ -13644,6 +13647,12 @@ GenTree* Compiler::fgMorphSmpOpOptional(GenTreeOp* tree)
     switch (oper)
     {
         case GT_ASG:
+            if (varTypeIsSIMD(typ) && !tree->IsPhiDefn())
+            {
+                break;
+            }
+
+
             if (varTypeIsStruct(typ) && !tree->IsPhiDefn())
             {
                 if (tree->OperIsCopyBlkOp())
