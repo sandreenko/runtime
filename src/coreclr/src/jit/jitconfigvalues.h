@@ -434,6 +434,8 @@ CONFIG_INTEGER(JitSaveFpLrWithCalleeSavedRegisters, W("JitSaveFpLrWithCalleeSave
 #endif // defined(TARGET_ARM64)
 #endif // DEBUG
 
+CONFIG_INTEGER(JitNoStructRetyping, W("JitNoStructRetyping"), 0) // Do not retype structs as primitive types.
+
 #undef CONFIG_INTEGER
 #undef CONFIG_STRING
 #undef CONFIG_METHODSET

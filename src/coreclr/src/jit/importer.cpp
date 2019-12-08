@@ -1204,8 +1204,11 @@ GenTree* Compiler::impAssignStructPtr(GenTree*             destAddr,
 
             var_types returnType = (var_types)src->AsCall()->gtReturnType;
 
-            // We won't use a return buffer, so change the type of src->gtType to 'returnType'
-            src->gtType = genActualType(returnType);
+            if (!compNoReturnRetyping())
+            {
+                // We won't use a return buffer, so change the type of src->gtType to 'returnType'
+                src->gtType = genActualType(returnType);
+            }
 
             // First we try to change this to "LclVar/LclFld = call"
             //
@@ -1285,13 +1288,18 @@ GenTree* Compiler::impAssignStructPtr(GenTree*             destAddr,
         else
         {
             // Case of inline method returning a struct in one or more registers.
-            //
-            var_types returnType = (var_types)call->gtReturnType;
-
             // We won't need a return buffer
-            asgType      = returnType;
-            src->gtType  = genActualType(returnType);
-            call->gtType = src->gtType;
+            if (compNoReturnRetyping())
+            {
+                asgType = src->gtType;
+            }
+            else
+            {
+                var_types returnType = (var_types)call->gtReturnType;
+                asgType              = returnType;
+                src->gtType          = genActualType(returnType);
+                call->gtType         = src->gtType;
+            }
 
             // !!! The destination could be on stack. !!!
             // This flag will let us choose the correct write barrier.
@@ -9089,6 +9097,10 @@ GenTree* Compiler::impFixupCallStructReturn(GenTreeCall* call, CORINFO_CLASS_HAN
     }
     else
     {
+        if (compNoReturnRetyping())
+        {
+            return call;
+        }
         assert(returnType != TYP_UNKNOWN);
 
         // See if the struct size is smaller than the return
@@ -9155,6 +9167,12 @@ GenTree* Compiler::impFixupStructReturnType(GenTree* op, CORINFO_CLASS_HANDLE re
 {
     assert(varTypeIsStruct(info.compRetType));
     assert(info.compRetBuffArg == BAD_VAR_NUM);
+
+    if (compNoReturnRetyping() && (!op->IsCall() || !op->AsCall()->TreatAsHasRetBufArg(this)))
+    {
+        // TODO: deal with these 2 special JIT intrinsics that don't have return buffer, but act like they do.
+        return op;
+    }
 
     JITDUMP("\nimpFixupStructReturnType: retyping\n");
     DISPTREE(op);
@@ -15195,10 +15213,16 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                     op1 = gtNewHelperCallNode(CORINFO_HELP_TYPEHANDLE_TO_RUNTIMETYPEHANDLE_MAYBENULL, TYP_STRUCT,
                                               helperArgs);
 
+                    CORINFO_CLASS_HANDLE classHandle = impGetTypeHandleClass();
+
                     // The handle struct is returned in register
                     op1->AsCall()->gtReturnType = GetRuntimeHandleUnderlyingType();
+                    if (compNoReturnRetyping())
+                    {
+                        op1->AsCall()->gtRetClsHnd = classHandle;
+                    }
 
-                    tiRetVal = typeInfo(TI_STRUCT, impGetTypeHandleClass());
+                    tiRetVal = typeInfo(TI_STRUCT, classHandle);
                 }
 
                 impPushOnStack(op1, tiRetVal);
@@ -15237,6 +15261,10 @@ void Compiler::impImportBlockCode(BasicBlock* block)
 
                 // The handle struct is returned in register
                 op1->AsCall()->gtReturnType = GetRuntimeHandleUnderlyingType();
+                if (compNoReturnRetyping())
+                {
+                    op1->AsCall()->gtRetClsHnd = tokenType;
+                }
 
                 tiRetVal = verMakeTypeInfo(tokenType);
                 impPushOnStack(op1, tiRetVal);
@@ -15413,6 +15441,18 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                     op1 = gtNewHelperCallNode(helper,
                                               (var_types)((helper == CORINFO_HELP_UNBOX) ? TYP_BYREF : TYP_STRUCT),
                                               gtNewCallArgs(op2, op1));
+                    if (compNoReturnRetyping())
+                    {
+                        if (op1->gtType == TYP_STRUCT)
+                        {
+                            op1->AsCall()->gtRetClsHnd = resolvedToken.hClass;
+                        }
+                        else
+                        {
+                            // We are doing unboxing, resolvedToken.hClass is available, but the result is byref
+                            // and gtRetClsHnd should not be used.
+                        }
+                    }
                 }
 
                 assert(helper == CORINFO_HELP_UNBOX && op1->gtType == TYP_BYREF || // Unbox helper returns a byref.
@@ -16589,11 +16629,15 @@ bool Compiler::impReturnInstruction(int prefixFlags, OPCODE& opcode)
                     // node type. During morphing, the GT_CALL will get the correct, final, native return type.
 
                     bool restoreType = false;
-                    if ((op2->OperGet() == GT_CALL) && (info.compRetType == TYP_STRUCT))
+                    if (!compNoReturnRetyping())
                     {
-                        noway_assert(op2->TypeGet() == TYP_STRUCT);
-                        op2->gtType = info.compRetNativeType;
-                        restoreType = true;
+
+                        if ((op2->OperGet() == GT_CALL) && (info.compRetType == TYP_STRUCT))
+                        {
+                            noway_assert(op2->TypeGet() == TYP_STRUCT);
+                            op2->gtType = info.compRetNativeType;
+                            restoreType = true;
+                        }
                     }
 
                     impAssignTempGen(lvaInlineeReturnSpillTemp, op2, se.seTypeInfo.GetClassHandle(),
@@ -16601,9 +16645,12 @@ bool Compiler::impReturnInstruction(int prefixFlags, OPCODE& opcode)
 
                     GenTree* tmpOp2 = gtNewLclvNode(lvaInlineeReturnSpillTemp, op2->TypeGet());
 
-                    if (restoreType)
+                    if (!compNoReturnRetyping())
                     {
-                        op2->gtType = TYP_STRUCT; // restore it to what it was
+                        if (restoreType)
+                        {
+                            op2->gtType = TYP_STRUCT; // restore it to what it was
+                        }
                     }
 
                     op2 = tmpOp2;
@@ -16830,7 +16877,16 @@ bool Compiler::impReturnInstruction(int prefixFlags, OPCODE& opcode)
 #endif
         op2 = impFixupStructReturnType(op2, retClsHnd);
         // return op2
-        op1 = gtNewOperNode(GT_RETURN, genActualType(info.compRetNativeType), op2);
+        var_types returnType;
+        if (compNoReturnRetyping())
+        {
+            returnType = info.compRetType;
+        }
+        else
+        {
+            returnType = info.compRetNativeType;
+        }
+        op1 = gtNewOperNode(GT_RETURN, genActualType(returnType), op2);
     }
     else
     {
