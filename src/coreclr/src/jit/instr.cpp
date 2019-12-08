@@ -1817,6 +1817,7 @@ instruction CodeGenInterface::ins_Load(var_types srcType, bool aligned /*=false*
  */
 instruction CodeGen::ins_Copy(var_types dstType)
 {
+    assert(emitTypeActSz[dstType] != 0); // Can't choose the instruction if we don't have a native type, but a struct.
 #if defined(_TARGET_XARCH_)
     if (varTypeIsSIMD(dstType))
     {

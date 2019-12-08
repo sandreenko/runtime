@@ -132,7 +132,7 @@ private:
     GenTree* LowerJTrue(GenTreeOp* jtrue);
     GenTreeCC* LowerNodeCC(GenTree* node, GenCondition condition);
     void LowerJmpMethod(GenTree* jmp);
-    void LowerRet(GenTree* ret);
+    void LowerRet(GenTreeUnOp* ret);
     GenTree* LowerDelegateInvoke(GenTreeCall* call);
     GenTree* LowerIndirectNonvirtCall(GenTreeCall* call);
     GenTree* LowerDirectCall(GenTreeCall* call);

@@ -1302,7 +1302,8 @@ int LinearScan::BuildBlockStore(GenTreeBlk* blkNode)
             src = src->AsUnOp()->gtGetOp1();
         }
 
-        srcAddrOrFill = src;
+        GenTree* fill = src;
+        srcAddrOrFill = fill;
 
         switch (blkNode->gtBlkOpKind)
         {
@@ -1342,10 +1343,12 @@ int LinearScan::BuildBlockStore(GenTreeBlk* blkNode)
     }
     else
     {
+        GenTree* fill    = nullptr;
+        GenTree* srcAddr = nullptr;
         if (src->OperIs(GT_IND))
         {
             assert(src->isContained());
-            srcAddrOrFill = src->AsIndir()->Addr();
+            srcAddr = src->AsIndir()->Addr();
         }
 
         if (blkNode->OperIs(GT_STORE_OBJ))
@@ -1359,7 +1362,15 @@ int LinearScan::BuildBlockStore(GenTreeBlk* blkNode)
             // The srcAddr must be in a register.  If it was under a GT_IND, we need to subsume all of its
             // sources.
             dstAddrRegMask = RBM_RDI;
-            srcRegMask     = RBM_RSI;
+            if (src->isContained())
+            {
+                srcRegMask = RBM_RSI;
+            }
+            else
+            {
+                assert(src->OperIs(GT_BITCAST));
+                srcRegMask = RBM_LNGRET; // TODO: check what should be here.
+            }
         }
         else
         {
@@ -1384,6 +1395,12 @@ int LinearScan::BuildBlockStore(GenTreeBlk* blkNode)
                         buildInternalFloatRegisterDefForNode(blkNode, internalFloatRegCandidates());
                         SetContainsAVXFlags();
                     }
+                    if (!src->isContained())
+                    {
+                        assert(src->OperIs(GT_BITCAST));
+                        fill = src;
+                    }
+
                     break;
 
                 case GenTreeBlk::BlkOpKindRepInstr:
@@ -1405,11 +1422,29 @@ int LinearScan::BuildBlockStore(GenTreeBlk* blkNode)
             }
         }
 
-        if ((srcAddrOrFill == nullptr) && (srcRegMask != RBM_NONE))
+        if ((srcAddr == nullptr) && (srcRegMask != RBM_NONE))
         {
-            // This is a local source; we'll use a temp register for its address.
-            assert(src->isContained() && src->OperIs(GT_LCL_VAR, GT_LCL_FLD));
-            buildInternalIntRegisterDefForNode(blkNode, srcRegMask);
+            if (src->isContained())
+            {
+                // This is a local source; we'll use a temp register for its address.
+                assert(src->OperIs(GT_LCL_VAR, GT_LCL_FLD));
+                buildInternalIntRegisterDefForNode(blkNode, srcRegMask);
+            }
+            else
+            {
+                assert(src->OperIs(GT_BITCAST));
+                // src will be on a register, use the same logic that we have for `fill` case.
+                fill = src;
+            }
+        }
+        if (fill != nullptr)
+        {
+            assert(srcAddr == nullptr);
+            srcAddrOrFill = fill;
+        }
+        else if (srcAddr != nullptr)
+        {
+            srcAddrOrFill = srcAddr;
         }
     }
 
@@ -2746,11 +2781,10 @@ int LinearScan::BuildCast(GenTreeCast* cast)
 //
 int LinearScan::BuildIndir(GenTreeIndir* indirTree)
 {
-    // If this is the rhs of a block copy (i.e. non-enregisterable struct),
-    // it has no register requirements.
     if (indirTree->TypeGet() == TYP_STRUCT)
     {
-        return 0;
+        // SHould not see this with retyping.
+        assert(compiler->compNoReturnRetyping());
     }
 
 #ifdef FEATURE_SIMD

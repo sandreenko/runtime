@@ -274,8 +274,9 @@ extern "C" void __cdecl assertAbort(const char* why, const char* file, unsigned 
     char*       buff      = (char*)alloca(BUFF_SIZE);
     if (env->compiler)
     {
-        _snprintf_s(buff, BUFF_SIZE, _TRUNCATE, "Assertion failed '%s' in '%s' (IL size %d)\n", why,
-                    env->compiler->info.compFullName, env->compiler->info.compILCodeSize);
+        _snprintf_s(buff, BUFF_SIZE, _TRUNCATE, "Assertion failed '%s' in '%d' '%s' (IL size %d)\n", why,
+                    Compiler::jitTotalMethodCompiled, env->compiler->info.compFullName,
+                    env->compiler->info.compILCodeSize);
         msg = buff;
     }
     printf(""); // null string means flush

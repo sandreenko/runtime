@@ -2688,7 +2688,28 @@ public:
 
             // The cseLclVarType must be a compatible with expTyp
             //
-            noway_assert(IsCompatibleType(cseLclVarTyp, expTyp));
+            if (m_pCompiler->compNoReturnRetyping() && cseLclVarTyp == TYP_STRUCT || expTyp == TYP_STRUCT)
+            {
+                // One of the reason when it can happen is described in fgMorphCopyBlock.
+                // TODO seandree: remove that workaround.
+                GenTree*  cand1                 = exp;
+                GenTree*  cand2                 = successfulCandidate->Expr();
+                var_types origType1             = cand1->gtType;
+                var_types origType2             = cand2->gtType;
+                cand1->gtType                   = TYP_STRUCT;
+                cand2->gtType                   = TYP_STRUCT;
+                CORINFO_CLASS_HANDLE structHnd1 = m_pCompiler->gtGetStructHandleIfPresent(cand1);
+                CORINFO_CLASS_HANDLE structHnd2 = m_pCompiler->gtGetStructHandleIfPresent(cand2);
+                assert(structHnd1 != NO_CLASS_HANDLE);
+                assert(structHnd2 != NO_CLASS_HANDLE);
+                assert(structHnd1 == structHnd2);
+                cand1->gtType = origType1;
+                cand2->gtType = origType2;
+            }
+            else
+            {
+                assert(IsCompatibleType(cseLclVarTyp, expTyp));
+            }
 
             // This will contain the replacement tree for exp
             // It will either be the CSE def or CSE ref

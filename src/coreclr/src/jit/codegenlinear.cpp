@@ -1184,7 +1184,15 @@ void CodeGen::genCopyRegIfNeeded(GenTree* node, regNumber needReg)
     assert(!node->isUsedFromSpillTemp());
     if (node->GetRegNum() != needReg)
     {
-        inst_RV_RV(INS_mov, needReg, node->GetRegNum(), node->TypeGet());
+        var_types varType = node->TypeGet();
+        if (varType == TYP_STRUCT)
+        {
+            assert(compiler->compNoReturnRetyping());
+            assert(node->OperIs(GT_BITCAST));
+            varType = node->AsUnOp()->gtOp1->TypeGet();
+            assert(varType != TYP_STRUCT);
+        }
+        inst_RV_RV(INS_mov, needReg, node->GetRegNum(), varType);
     }
 }
 
@@ -1719,18 +1727,26 @@ void CodeGen::genConsumeBlockSrc(GenTreeBlk* blkNode)
     if (blkNode->OperIsCopyBlkOp())
     {
         // For a CopyBlk we need the address of the source.
-        assert(src->isContained());
-        if (src->OperGet() == GT_IND)
+        if (src->OperIs(GT_IND, GT_LCL_VAR))
         {
-            src = src->AsOp()->gtOp1;
+            assert(src->isContained());
+            if (src->OperGet() == GT_IND)
+            {
+                src = src->AsOp()->gtOp1;
+            }
+            else
+            {
+                // This must be a local.
+                // For this case, there is no source address register, as it is a
+                // stack-based address.
+                assert(src->OperIsLocal());
+                return;
+            }
         }
         else
         {
-            // This must be a local.
-            // For this case, there is no source address register, as it is a
-            // stack-based address.
-            assert(src->OperIsLocal());
-            return;
+            assert(compiler->compNoReturnRetyping());
+            assert(src->OperIs(GT_BITCAST));
         }
     }
     else
@@ -1755,17 +1771,27 @@ void CodeGen::genSetBlockSrc(GenTreeBlk* blkNode, regNumber srcReg)
     GenTree* src = blkNode->Data();
     if (blkNode->OperIsCopyBlkOp())
     {
-        // For a CopyBlk we need the address of the source.
-        if (src->OperGet() == GT_IND)
+        if (src->OperIs(GT_IND, GT_LCL_VAR))
         {
-            src = src->AsOp()->gtOp1;
+            assert(src->isContained());
+            // For a CopyBlk we need the address of the source.
+            if (src->OperGet() == GT_IND)
+            {
+                src = src->AsOp()->gtOp1;
+            }
+            else
+            {
+                // This must be a local struct.
+                // Load its address into srcReg.
+                assert(src->OperIsLocal());
+                inst_RV_TT(INS_lea, srcReg, src, 0, EA_BYREF);
+                return;
+            }
         }
         else
         {
-            // This must be a local struct.
-            // Load its address into srcReg.
-            inst_RV_TT(INS_lea, srcReg, src, 0, EA_BYREF);
-            return;
+            assert(compiler->compNoReturnRetyping());
+            assert(src->OperIs(GT_BITCAST));
         }
     }
     else

@@ -1069,7 +1069,19 @@ private:
         var_types type = tree->TypeGet();
         if (type == TYP_STRUCT)
         {
-            type = compiler->lvaGetDesc(tree->AsLclVar())->GetLayout()->GetRegisterType();
+            // Need to find the register type.
+            if (tree->OperIsLocal())
+            {
+                LclVarDsc* varDsc = compiler->lvaGetDesc(tree->AsLclVar());
+                type              = varDsc->GetLayout()->GetRegisterType();
+            }
+            else
+            {
+                assert(compiler->compNoReturnRetyping());
+                assert(tree->OperIs(GT_BITCAST));
+                type = tree->AsUnOp()->gtGetOp1()->gtType;
+                assert(!varTypeIsStruct(type));
+            }
         }
         return type;
     }

@@ -4050,7 +4050,10 @@ private:
 #endif // FEATURE_VARARG
 
 #if defined(DEBUG)
+public:
     static unsigned jitTotalMethodCompiled;
+
+private:
 #endif
 
 #ifdef DEBUG
@@ -8883,6 +8886,12 @@ public:
 #else  // !_TARGET_AMD64_
         return (compIsProfilerHookNeeded()) && (info.compRetBuffArg != BAD_VAR_NUM);
 #endif // !_TARGET_AMD64_
+    }
+
+    bool compNoReturnRetyping()
+    {
+        char* nofixup = getenv("nofixup");
+        return (nofixup != nullptr);
     }
 
     // Returns true if the method returns a value in more than one return register

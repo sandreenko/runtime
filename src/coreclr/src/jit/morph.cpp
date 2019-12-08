@@ -5029,6 +5029,11 @@ void Compiler::fgAddSkippedRegsInPromotedStructArg(LclVarDsc* varDsc,
 //
 void Compiler::fgFixupStructReturn(GenTree* callNode)
 {
+    char* nofixup = getenv("nofixup");
+    if (nofixup != nullptr)
+    {
+        return;
+    }
     assert(varTypeIsStruct(callNode));
 
     GenTreeCall* call              = callNode->AsCall();
@@ -7388,6 +7393,13 @@ GenTree* Compiler::fgMorphPotentialTailCall(GenTreeCall* call)
             nodeTy = TYP_DOUBLE;
         }
 #endif
+        if (varTypeIsStruct(nodeTy))
+        {
+            // This is a register-returned struct. Return a 0.
+            // The actual return registers are hacked in lower and the register allocator.
+            assert(compNoReturnRetyping());
+            nodeTy = TYP_INT;
+        }
         result = gtNewZeroConNode(genActualType(nodeTy));
         result = fgMorphTree(result);
     }
@@ -8891,7 +8903,8 @@ GenTree* Compiler::fgMorphOneAsgBlockOp(GenTree* tree)
 
                 if (dest == destLclVarTree)
                 {
-                    dest = gtNewIndir(asgType, gtNewOperNode(GT_ADDR, TYP_BYREF, dest));
+                    GenTree* addr = gtNewOperNode(GT_ADDR, TYP_BYREF, dest);
+                    dest          = gtNewIndir(asgType, addr);
                 }
             }
         }
@@ -9600,8 +9613,16 @@ GenTree* Compiler::fgMorphBlockOperand(GenTree* tree, var_types asgType, unsigne
         }
         else if (effectiveVal->TypeGet() != asgType)
         {
-            GenTree* addr = gtNewOperNode(GT_ADDR, TYP_BYREF, effectiveVal);
-            effectiveVal  = gtNewIndir(asgType, addr);
+            // TODO seandree: check that again.
+            if (compNoReturnRetyping())
+            {
+                bool canTakeAddr = !effectiveVal->IsCall() && !effectiveVal->OperIsSIMD();
+                if (canTakeAddr)
+                {
+                    GenTree* addr = gtNewOperNode(GT_ADDR, TYP_BYREF, effectiveVal);
+                    effectiveVal  = gtNewIndir(asgType, addr);
+                }
+            }
         }
     }
     else
@@ -9623,6 +9644,11 @@ GenTree* Compiler::fgMorphBlockOperand(GenTree* tree, var_types asgType, unsigne
         {
             lclNode = effectiveVal->AsLclVarCommon();
         }
+        else if (effectiveVal->IsCall())
+        {
+            needsIndirection = false;
+        }
+
         if (lclNode != nullptr)
         {
             LclVarDsc* varDsc = &(lvaTable[lclNode->GetLclNum()]);
@@ -10437,6 +10463,13 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
                     }
                     if (!done)
                     {
+                        // Sometimes src should have TYP_STRUCT type, you can check it by doing:
+                        // indir = gtNewIndir(TYP_STRUCT, src);
+                        // structHndl = gtGetStructHandleIfPresent(indir);
+                        // if (structHndl != NO_CLASS_HANDLE) then it has to be struct,
+                        // but sometimes src destType thinks differently.
+                        // TODO seandree: expand this, it is an agly case of field by field assignment,
+                        // that looks like struct = byref.
                         src = gtNewIndir(destType, src);
                     }
                 }
@@ -12812,7 +12845,21 @@ DONE_MORPHING_CHILDREN:
             // is a local or clsVar, even if it has been address-exposed.
             if (op1->OperGet() == GT_ADDR)
             {
-                tree->gtFlags |= (op1->gtGetOp1()->gtFlags & GTF_GLOB_REF);
+                GenTreeUnOp* addr   = op1->AsUnOp();
+                GenTree*     addrOp = addr->gtGetOp1();
+                tree->gtFlags |= (addrOp->gtFlags & GTF_GLOB_REF);
+                if (addrOp->OperIs(GT_LCL_VAR) && (tree->gtType != addrOp->gtType))
+                {
+                    // assert(compNoReturnRetyping());
+                    unsigned lclNum = addrOp->AsLclVar()->GetLclNum();
+                    // That is for
+                    // [000005] --CXG------ - * RETURN    struct
+                    // [000004] --CXG------ - \-- * OBJ       struct < System.Runtime.Intrinsics.Vector64`1[Double], 8 >
+                    // [000006] ------------      \--* ADDR      byref
+                    // [000007] ------------         \--* LCL_VAR   double V00 arg0
+                    // TODO seandree: optimize it to fold OBJ struct(ADDR) as bitcast in lower.
+                    // lvaSetVarDoNotEnregister(lclNum DEBUGARG(DNER_LocalField));
+                }
             }
             break;
 
