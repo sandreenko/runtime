@@ -6417,7 +6417,7 @@ GenTree* Compiler::gtArgNodeByLateArgInx(GenTreeCall* call, unsigned lateArgInx)
  *  Create a node that will assign 'src' to 'dst'.
  */
 
-GenTree* Compiler::gtNewAssignNode(GenTree* dst, GenTree* src)
+GenTreeOp* Compiler::gtNewAssignNode(GenTree* dst, GenTree* src)
 {
     /* Mark the target as being assigned */
 
@@ -6434,7 +6434,7 @@ GenTree* Compiler::gtNewAssignNode(GenTree* dst, GenTree* src)
 
     /* Create the assignment node */
 
-    GenTree* asg = gtNewOperNode(GT_ASG, dst->TypeGet(), dst, src);
+    GenTreeOp* asg = gtNewOperNode(GT_ASG, dst->TypeGet(), dst, src)->AsOp();
 
     /* Mark the expression as containing an assignment */
 
@@ -14981,6 +14981,25 @@ GenTree* Compiler::gtNewTempAssign(
             // and call returns. Lowering and Codegen will handle these.
             ok = true;
         }
+        else
+        {
+            assert(compNoReturnRetyping());
+            assert(!varTypeIsStruct(dstTyp));
+            unsigned dstSize = genTypeSize(dstTyp);
+
+            unsigned srcSize = genTypeSize(valTyp);
+            if (srcSize == 0)
+            {
+                assert(val->IsCall());
+                CORINFO_CLASS_HANDLE structHnd = val->AsCall()->gtRetClsHnd;
+                srcSize                        = info.compCompHnd->getClassSize(structHnd);
+            }
+            if (dstSize == srcSize)
+            {
+                // check that one of them is SIMD and another struct, find examples.
+                ok = true;
+            }
+        }
 
         if (!ok)
         {
@@ -15005,19 +15024,21 @@ GenTree* Compiler::gtNewTempAssign(
     GenTree* dest = gtNewLclvNode(tmp, dstTyp);
     dest->gtFlags |= GTF_VAR_DEF;
 
+    // TODO seandree: change the code below, because right now it is a mess.
+
     // With first-class structs, we should be propagating the class handle on all non-primitive
     // struct types. We don't have a convenient way to do that for all SIMD temps, since some
     // internal trees use SIMD types that are not used by the input IL. In this case, we allow
     // a null type handle and derive the necessary information about the type from its varType.
-    CORINFO_CLASS_HANDLE structHnd = gtGetStructHandleIfPresent(val);
-    if (varTypeIsStruct(varDsc) && ((structHnd != NO_CLASS_HANDLE) || (varTypeIsSIMD(valTyp))))
+    CORINFO_CLASS_HANDLE valStructHnd = gtGetStructHandleIfPresent(val);
+    if (varTypeIsStruct(varDsc) && ((valStructHnd != NO_CLASS_HANDLE) || (varTypeIsSIMD(valTyp))))
     {
         // The struct value may be be a child of a GT_COMMA.
         GenTree* valx = val->gtEffectiveVal(/*commaOnly*/ true);
 
-        if (structHnd != NO_CLASS_HANDLE)
+        if (valStructHnd != NO_CLASS_HANDLE)
         {
-            lvaSetStruct(tmp, structHnd, false);
+            lvaSetStruct(tmp, valStructHnd, false);
         }
         else
         {
@@ -15025,7 +15046,7 @@ GenTree* Compiler::gtNewTempAssign(
         }
         dest->gtFlags |= GTF_DONT_CSE;
         valx->gtFlags |= GTF_DONT_CSE;
-        asg = impAssignStruct(dest, val, structHnd, (unsigned)CHECK_SPILL_NONE, pAfterStmt, ilOffset, block);
+        asg = impAssignStruct(dest, val, valStructHnd, (unsigned)CHECK_SPILL_NONE, pAfterStmt, ilOffset, block);
     }
     else
     {
@@ -15033,7 +15054,8 @@ GenTree* Compiler::gtNewTempAssign(
         // when the ABI calls for returning a struct as a primitive type.
         // TODO-1stClassStructs: When we stop "lying" about the types for ABI purposes, the
         // 'genReturnLocal' should be the original struct type.
-        assert(!varTypeIsStruct(valTyp) || typGetObjLayout(structHnd)->GetSize() == genTypeSize(varDsc));
+        assert(!varTypeIsStruct(valTyp) || ((valStructHnd != NO_CLASS_HANDLE) &&
+                                            (typGetObjLayout(valStructHnd)->GetSize() == genTypeSize(varDsc))));
         asg = gtNewAssignNode(dest, val);
     }
 
@@ -16969,6 +16991,10 @@ CORINFO_CLASS_HANDLE Compiler::gtGetStructHandleIfPresent(GenTree* tree)
         {
             default:
                 break;
+            case GT_BITCAST:
+                assert(compNoReturnRetyping());
+                structHnd = gtGetStructHandleIfPresent(tree->AsUnOp()->gtOp1);
+                break;
             case GT_MKREFANY:
                 structHnd = impGetRefAnyClass();
                 break;
@@ -17034,28 +17060,28 @@ CORINFO_CLASS_HANDLE Compiler::gtGetStructHandleIfPresent(GenTree* tree)
                     }
                     else
                     {
-                        GenTree* addr = tree->AsIndir()->Addr();
+                        GenTree*      addr     = tree->AsIndir()->Addr();
+                        FieldSeqNode* fieldSeq = nullptr;
                         if ((addr->OperGet() == GT_ADD) && addr->gtGetOp2()->OperIs(GT_CNS_INT))
                         {
-                            FieldSeqNode* fieldSeq = addr->gtGetOp2()->AsIntCon()->gtFieldSeq;
-
-                            if (fieldSeq != nullptr)
-                            {
-                                while (fieldSeq->m_next != nullptr)
-                                {
-                                    fieldSeq = fieldSeq->m_next;
-                                }
-                                if (fieldSeq != FieldSeqStore::NotAField() && !fieldSeq->IsPseudoField())
-                                {
-                                    CORINFO_FIELD_HANDLE fieldHnd = fieldSeq->m_fieldHnd;
-                                    CorInfoType fieldCorType = info.compCompHnd->getFieldType(fieldHnd, &structHnd);
-                                    assert(fieldCorType == CORINFO_TYPE_VALUECLASS);
-                                }
-                            }
+                            fieldSeq = addr->gtGetOp2()->AsIntCon()->gtFieldSeq;
                         }
-                        else if (addr->OperGet() == GT_LCL_VAR)
+                        else
                         {
-                            structHnd = gtGetStructHandleIfPresent(addr);
+                            GetZeroOffsetFieldMap()->Lookup(addr, &fieldSeq);
+                        }
+                        if (fieldSeq != nullptr)
+                        {
+                            while (fieldSeq->m_next != nullptr)
+                            {
+                                fieldSeq = fieldSeq->m_next;
+                            }
+                            if (fieldSeq != FieldSeqStore::NotAField() && !fieldSeq->IsPseudoField())
+                            {
+                                CORINFO_FIELD_HANDLE fieldHnd = fieldSeq->m_fieldHnd;
+                                CorInfoType fieldCorType      = info.compCompHnd->getFieldType(fieldHnd, &structHnd);
+                                assert(fieldCorType == CORINFO_TYPE_VALUECLASS);
+                            }
                         }
                     }
                 }
@@ -17072,6 +17098,19 @@ CORINFO_CLASS_HANDLE Compiler::gtGetStructHandleIfPresent(GenTree* tree)
 #endif
                 break;
         }
+        // TODO seandree: add a check that `structHnd != NO_CLASS_HANDLE`,
+        // today it won't work because the right part of an ASG could have struct type without a handle
+        // (check `fgMorphBlockOperand(isBlkReqd`) and a few other cases.
+    }
+    else if (tree->OperIs(GT_LCL_VAR))
+    {
+        LclVarDsc* varDsc = lvaGetDesc(tree->AsLclVarCommon());
+        // LCL_VAR could be retyped into byref by "Replacing address of implicit by ref struct parameter with byref".
+        // but it will still have a struct handle.
+        // TODO seandree: get rid of this case or expand the explanation
+        // TODO seandree: I can't remember what was the case that needed that condition,
+        // try to delete that.
+        structHnd = varDsc->lvVerTypeInfo.GetClassHandle();
     }
     return structHnd;
 }

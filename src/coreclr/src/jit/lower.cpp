@@ -112,8 +112,8 @@ GenTree* Lowering::LowerNode(GenTree* node)
     switch (node->gtOper)
     {
         case GT_IND:
-            // Leave struct typed indirs alone, they only appear as the source of
-            // block copy operations and LowerBlockStore will handle those.
+            // Process struct typed indirs separately, they only appear as the source of
+            // block copy operations.
             if (node->TypeGet() != TYP_STRUCT)
             {
                 // TODO-Cleanup: We're passing isContainable = true but ContainCheckIndir rejects
@@ -121,6 +121,18 @@ GenTree* Lowering::LowerNode(GenTree* node)
                 // or (reg + reg) LEAs that are not necessary.
                 TryCreateAddrMode(node->AsIndir()->Addr(), true);
                 ContainCheckIndir(node->AsIndir());
+            }
+            else if (!node->isContained())
+            {
+                // We can have an indirection with struct type that is not marked as contained.
+                // If it is under STORE_OBJ lets hope it will mark it as contained,
+                //  Kernel32:GetEnvironmentVariable(System.String,System.Span`1[Char]):int (MethodHash=c77f1112) as
+                //  example.
+                // In that case indir has no information about struct type:
+                // N002(6, 4)[000005] n------N---- | \-- * IND       struct
+                // N001(3, 2)[000002] ------------ | \-- * LCL_VAR   byref  V01 arg1
+                //
+                // If it is under RETURN, then we should have structHndl inside the tree, access it from GT_RETURN.
             }
             break;
 
@@ -317,7 +329,6 @@ GenTree* Lowering::LowerNode(GenTree* node)
                     store->gtType = src->TypeGet();
                 }
             }
-
             if ((node->TypeGet() == TYP_STRUCT) && (src->OperGet() != GT_PHI))
             {
                 LclVarDsc* varDsc = comp->lvaGetDesc(store);
@@ -1681,6 +1692,27 @@ void Lowering::LowerCall(GenTree* node)
         // since LowerFastTailCall calls InsertPInvokeMethodEpilog.
         LowerFastTailCall(call);
     }
+
+#if !FEATURE_MULTIREG_RET
+    if (varTypeIsStruct(call))
+    {
+        assert(comp->compNoReturnRetyping());
+        CORINFO_CLASS_HANDLE        retClsHnd = call->gtRetClsHnd;
+        Compiler::structPassingKind howToReturnStruct;
+        var_types                   returnType = comp->getReturnTypeForStruct(retClsHnd, &howToReturnStruct);
+        assert(!varTypeIsStruct(returnType));
+        var_types origType = call->gtType;
+        call->gtType       = returnType;
+
+        LIR::Use callUse;
+        if (BlockRange().TryGetUse(call, &callUse))
+        {
+            GenTreeUnOp* bitcast = new (comp, GT_BITCAST) GenTreeOp(GT_BITCAST, origType, call, nullptr);
+            BlockRange().InsertAfter(call, bitcast);
+            callUse.ReplaceWith(comp, bitcast);
+        }
+    }
+#endif // !FEATURE_MULTIREG_RET
 
     ContainCheckCallOperands(call);
     JITDUMP("lowering call (after):\n");
@@ -3131,6 +3163,132 @@ void Lowering::LowerRet(GenTreeUnOp* ret)
         BlockRange().InsertBefore(ret, bitcast);
         ContainCheckBitCast(bitcast);
     }
+#if !FEATURE_MULTIREG_RET
+    else
+    {
+#ifdef DEBUG
+        if (ret->TypeGet() != TYP_VOID)
+        {
+            if (varTypeIsStruct(ret->TypeGet()) != varTypeIsStruct(ret->gtGetOp1()->TypeGet()))
+            {
+
+                GenTree* retVal = ret->gtGetOp1();
+                if (retVal->OperIs(GT_LCL_VAR))
+                {
+                    // This could happen if we lied about op1 type during struct promotion,
+                    // for a struct with a struct field that could be retyped as primitive,
+                    // check `retypedFieldsMap` for details.
+                    GenTreeLclVar* lclVar = retVal->AsLclVar();
+                    LclVarDsc*     varDsc = comp->lvaGetDesc(lclVar);
+                    assert(varDsc->lvIsStructField);
+                }
+                else
+                {
+                    assert(retVal->OperIs(GT_LCL_FLD));
+                    // 'special' helpers that return true from `TreatAsHasRetBufArg`
+                    // and can create trees like:
+                    // N004 (  3,  2) [000018] -------N----        t18 =    LCL_VAR_ADDR byref  V05 tmp1
+                    //                                                   *    bool   V05.hasValue (offs=0x00) -> V08
+                    //                                                   tmp4
+                    //                                                   *    bool   V05.value (offs=0x01) -> V09 tmp5
+                    // N006 (  3,  2) [000015] ------------        t15 =    LCL_VAR   ref   (AX) V02 loc0          $380
+                    // N007 (  3, 10) [000016] ------------        t16 =    CNS_INT(h) long   0xd1ffab1e class $1c1
+                    //                                                   /--*  t18    byref  arg0 in rcx
+                    //                                                   +--*  t15    ref    arg2 in r8
+                    //                                                   +--*  t16    long   arg1 in rdx
+                    // N008 ( 23, 23) [000017] --CXG-------              *  CALL help void
+                    // HELPER.CORINFO_HELP_UNBOX_NULLABLE $206
+                    // N001 (  4,  5) [000020] ------------        t20 =    LCL_FLD   short  V05 tmp1         [+0]
+                    //                                                   *    bool   V05.hasValue (offs=0x00) -> V08
+                    //                                                   tmp4
+                    //                                                   *    bool   V05.value (offs=0x01) -> V09 tmp5
+                    //                                                   $400
+                    //                                                   /--*  t20    short
+                    // N002 (  5,  6) [000021] ----G-------              *  RETURN    struct $2c2
+                    // TODO seandree: find a way to get rid of them.
+                }
+                assert(genActualType(comp->info.compRetNativeType) == genActualType(retVal->TypeGet()));
+            }
+        }
+#endif
+        if (varTypeIsStruct(ret))
+        {
+            assert(comp->compNoReturnRetyping());
+            GenTree*  retVal           = ret->gtGetOp1();
+            var_types nativeReturnType = genActualType(comp->info.compRetNativeType);
+
+            ret->ChangeType(nativeReturnType);
+
+            assert(retVal->OperIs(GT_IND, GT_OBJ, GT_LCL_VAR, GT_LCL_FLD, GT_BITCAST, GT_CNS_INT, GT_SIMD));
+            switch (retVal->OperGet())
+            {
+                case GT_OBJ:
+                case GT_IND:
+                    // That is a mess when we have smth like:
+                    // [000003] -- - XG------ - *  RETURN    long
+                    // [000002] -- - XG------ - \-- * FIELD     struct m_fieldHandle
+                    // [000001] ------------         \-- * LCL_VAR   ref    V00 this
+                    // that is transformed into:
+                    // N003(5, 4)[000005] ------------t5 = * ADD       byref
+                    //                                         / -- * t5     byref
+                    // N004(8, 6)[000002] -- - XG------ - t2 = * IND       struct
+                    //                                    / -- * t2     struct
+                    // N005(9, 7)[000003] -- - XG------ - * RETURN    long
+                    // We can't catch it when lowering IND, because
+                    // we will mess with STORE_BLK(IND) case.
+                    retVal->ChangeType(nativeReturnType);
+                    if (retVal->OperIs(GT_OBJ))
+                    {
+                        retVal->ChangeOper(GT_IND);
+                    }
+                    break;
+                case GT_LCL_VAR:
+                {
+                    GenTreeLclVar* lclVar = retVal->AsLclVar();
+                    unsigned       lclNum = lclVar->GetLclNum();
+                    LclVarDsc*     varDsc = comp->lvaGetDesc(lclNum);
+                    if (varDsc->lvPromoted &&
+                        comp->lvaGetPromotionType(lclNum) == Compiler::lvaPromotionType::PROMOTION_TYPE_INDEPENDENT)
+                    {
+                        // We have to replace it with its field.
+                        assert(varDsc->lvFieldCnt == 1);
+                        assert(varDsc->lvRefCnt() == 0);
+                        unsigned fieldLclNum = varDsc->lvFieldLclStart;
+                        lclVar->SetLclNum(fieldLclNum);
+                        JITDUMP("Replacing independently promoted parent local var with its only field for the return "
+                                "%u, %u\n",
+                                lclNum, fieldLclNum);
+                        LclVarDsc* fieldDsc = comp->lvaGetDesc(fieldLclNum);
+                        retVal->ChangeType(fieldDsc->lvType);
+                    }
+
+                    GenTreeUnOp* bitcast =
+                        new (comp, GT_BITCAST) GenTreeOp(GT_BITCAST, ret->TypeGet(), retVal, nullptr);
+                    ret->gtOp1 = bitcast;
+                    BlockRange().InsertBefore(ret, bitcast);
+                    ContainCheckBitCast(bitcast);
+                    break;
+                }
+                case GT_CNS_INT:
+                case GT_BITCAST:
+                    retVal->ChangeType(nativeReturnType);
+                    break;
+                case GT_SIMD:
+                case GT_LCL_FLD:
+                {
+                    GenTreeUnOp* bitcast =
+                        new (comp, GT_BITCAST) GenTreeOp(GT_BITCAST, ret->TypeGet(), retVal, nullptr);
+                    ret->gtOp1 = bitcast;
+                    BlockRange().InsertBefore(ret, bitcast);
+                    ContainCheckBitCast(bitcast);
+                    break;
+                }
+                default:
+                    unreached();
+            }
+        }
+    }
+#endif // !FEATURE_MULTIREG_RET
 
     // Method doing PInvokes has exactly one return block unless it has tail calls.
     if (comp->compMethodRequiresPInvokeFrame() && (comp->compCurBB == comp->genReturnBB))
