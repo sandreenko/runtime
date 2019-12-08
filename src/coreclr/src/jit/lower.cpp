@@ -112,8 +112,8 @@ GenTree* Lowering::LowerNode(GenTree* node)
     switch (node->gtOper)
     {
         case GT_IND:
-            // Leave struct typed indirs alone, they only appear as the source of
-            // block copy operations and LowerBlockStore will handle those.
+            // Process struct typed indirs separatly, they only appear as the source of
+            // block copy operations.
             if (node->TypeGet() != TYP_STRUCT)
             {
                 // TODO-Cleanup: We're passing isContainable = true but ContainCheckIndir rejects
@@ -121,6 +121,18 @@ GenTree* Lowering::LowerNode(GenTree* node)
                 // or (reg + reg) LEAs that are not necessary.
                 TryCreateAddrMode(node->AsIndir()->Addr(), true);
                 ContainCheckIndir(node->AsIndir());
+            }
+            else if (!node->isContained())
+            {
+                // We can have an indirection with struct type that is not marked as contained.
+                // If it is under STORE_OBJ lets hope it will mark it as contained,
+                //  Kernel32:GetEnvironmentVariable(System.String,System.Span`1[Char]):int (MethodHash=c77f1112) as
+                //  example.
+                // In that case indir has no information about struct type:
+                // N002(6, 4)[000005] n------N---- | \-- * IND       struct
+                // N001(3, 2)[000002] ------------ | \-- * LCL_VAR   byref  V01 arg1
+                //
+                // If it is under RETURN, then we should have structHndl inside the tree, access it from GT_RETURN.
             }
             break;
 
@@ -317,7 +329,6 @@ GenTree* Lowering::LowerNode(GenTree* node)
                     store->gtType = src->TypeGet();
                 }
             }
-
             if ((node->TypeGet() == TYP_STRUCT) && (src->OperGet() != GT_PHI))
             {
                 LclVarDsc* varDsc = comp->lvaGetDesc(store);
@@ -1680,6 +1691,25 @@ void Lowering::LowerCall(GenTree* node)
         // There is one side effect which is flipping the order of PME and control expression
         // since LowerFastTailCall calls InsertPInvokeMethodEpilog.
         LowerFastTailCall(call);
+    }
+
+    if (varTypeIsStruct(call))
+    {
+        assert(comp->compNoReturnRetyping());
+        CORINFO_CLASS_HANDLE        retClsHnd = call->gtRetClsHnd;
+        Compiler::structPassingKind howToReturnStruct;
+        var_types                   returnType = comp->getReturnTypeForStruct(retClsHnd, &howToReturnStruct);
+        assert(!varTypeIsStruct(returnType));
+        var_types origType = call->gtType;
+        call->gtType       = returnType;
+
+        LIR::Use callUse;
+        if (BlockRange().TryGetUse(call, &callUse))
+        {
+            GenTreeUnOp* bitcast = new (comp, GT_BITCAST) GenTreeOp(GT_BITCAST, origType, call, nullptr);
+            BlockRange().InsertAfter(call, bitcast);
+            callUse.ReplaceWith(comp, bitcast);
+        }
     }
 
     ContainCheckCallOperands(call);
@@ -3131,6 +3161,61 @@ void Lowering::LowerRet(GenTreeUnOp* ret)
         BlockRange().InsertBefore(ret, bitcast);
         ContainCheckBitCast(bitcast);
     }
+
+#if 0
+    if (varTypeIsStruct(ret))
+    {
+        ret->gtType = genActualType(comp->info.compRetNativeType);
+    }
+    if (ret->gtType != TYP_VOID)
+    {
+        GenTree* retVal = ret->gtOp1;
+
+        if (varTypeIsStruct(retVal))
+        {
+            // That is a mess when we have smth like:
+            // [000003] -- - XG------ - *  RETURN    long
+            // [000002] -- - XG------ - \-- * FIELD     struct m_fieldHandle
+            // [000001] ------------         \-- * LCL_VAR   ref    V00 this
+            // that is transformed into:
+            // N003(5, 4)[000005] ------------t5 = * ADD       byref
+            //                                         / -- * t5     byref
+            // N004(8, 6)[000002] -- - XG------ - t2 = * IND       struct
+            //                                    / -- * t2     struct
+            // N005(9, 7)[000003] -- - XG------ - * RETURN    long
+            // We can't catch it when lowering IND, because
+            // we will mess with STORE_BLK(IND) case.
+            // seandree: doesn't FIELD require an address instead of LCL_VAR?
+            assert(retVal->OperIs(GT_IND, GT_OBJ, GT_LCL_VAR, GT_LCL_FLD, GT_BITCAST, GT_CNS_INT, GT_SIMD));
+            retVal->gtType = ret->gtType;
+            if (retVal->OperIs(GT_OBJ))
+            {
+                retVal->ChangeOper(GT_IND);
+            }
+
+            else if (retVal->OperIs(GT_LCL_VAR))
+            {
+                GenTreeLclVar* lclVar = retVal->AsLclVar();
+                unsigned       lclNum = lclVar->GetLclNum();
+                LclVarDsc*     varDsc = comp->lvaGetDesc(lclNum);
+                if (varDsc->lvPromoted &&
+                    comp->lvaGetPromotionType(lclNum) == Compiler::lvaPromotionType::PROMOTION_TYPE_INDEPENDENT)
+                {
+                    // We have to replace it with its field.
+                    assert(varDsc->lvFieldCnt == 1);
+                    assert(varDsc->lvRefCnt() == 0);
+                    unsigned fieldLclNum = varDsc->lvFieldLclStart;
+                    lclVar->SetLclNum(fieldLclNum);
+                    JITDUMP(
+                        "Replacing independently promoted parent local var with its only field for the return %u, %u\n",
+                        lclNum, fieldLclNum);
+                }
+            }
+
+            // TODO seandree: check that unOp has struct handle.
+        }
+    }
+#endif
 
     // Method doing PInvokes has exactly one return block unless it has tail calls.
     if (comp->compMethodRequiresPInvokeFrame() && (comp->compCurBB == comp->genReturnBB))

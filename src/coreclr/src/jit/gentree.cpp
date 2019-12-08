@@ -14981,6 +14981,25 @@ GenTree* Compiler::gtNewTempAssign(
             // and call returns. Lowering and Codegen will handle these.
             ok = true;
         }
+        else
+        {
+            assert(compNoReturnRetyping());
+            assert(!varTypeIsStruct(dstTyp));
+            unsigned dstSize = genTypeSize(dstTyp);
+
+            unsigned srcSize = genTypeSize(valTyp);
+            if (srcSize == 0)
+            {
+                assert(val->IsCall());
+                CORINFO_CLASS_HANDLE structHnd = val->AsCall()->gtRetClsHnd;
+                srcSize                        = info.compCompHnd->getClassSize(structHnd);
+            }
+            if (dstSize == srcSize)
+            {
+                // check that one of them is SIMD and another struct, find examples.
+                ok = true;
+            }
+        }
 
         if (!ok)
         {
@@ -16969,6 +16988,10 @@ CORINFO_CLASS_HANDLE Compiler::gtGetStructHandleIfPresent(GenTree* tree)
         {
             default:
                 break;
+            case GT_BITCAST:
+                assert(compNoReturnRetyping());
+                structHnd = gtGetStructHandleIfPresent(tree->AsUnOp()->gtOp1);
+                break;
             case GT_MKREFANY:
                 structHnd = impGetRefAnyClass();
                 break;
@@ -17072,6 +17095,14 @@ CORINFO_CLASS_HANDLE Compiler::gtGetStructHandleIfPresent(GenTree* tree)
 #endif
                 break;
         }
+    }
+    else if (tree->OperIs(GT_LCL_VAR))
+    {
+        LclVarDsc* varDsc = lvaGetDesc(tree->AsLclVarCommon());
+        // LCL_VAR could be retyped into byref by "Replacing address of implicit by ref struct parameter with byref".
+        // but it will still have a struct handle.
+        // TODO seandree: get rid of this case or expand the explanation.
+        structHnd = varDsc->lvVerTypeInfo.GetClassHandle();
     }
     return structHnd;
 }

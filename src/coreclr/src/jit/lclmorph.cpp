@@ -521,6 +521,31 @@ public:
                 PopValue();
                 break;
 
+            case GT_RETURN:
+                if (node->gtType != TYP_VOID)
+                {
+                    EscapeValue(TopValue(0), node);
+
+                    GenTree* retVal = node->AsUnOp()->gtOp1;
+                    if (retVal->OperIs(GT_LCL_VAR))
+                    {
+                        unsigned   lclNum = TopValue(0).LclNum();
+                        LclVarDsc* varDsc = m_compiler->lvaGetDesc(lclNum);
+                        if (varDsc->lvPromotedStruct() && (varDsc->lvFieldCnt != 1))
+                        {
+                            assert(m_compiler->compNoReturnRetyping() || varDsc->lvDoNotEnregister);
+                            // Its fields were accessed, so do not enregister it.
+                            // TODO seandree: it is possible to enregister that if we add a gather operation in codegen.
+                            // like struct s { bool a -> rax, bool b -> rdx, bool c -> rcx } -> rax,
+                            // return s -> gather(a, b, c) from their registers into rax.
+                            m_compiler->lvaSetVarDoNotEnregister(lclNum DEBUGARG(Compiler::DNER_LocalField));
+                        }
+                    }
+                    PopValue();
+                    assert(TopValue(0).Node() == node);
+                }
+                break;
+
             default:
                 while (TopValue(0).Node() != node)
                 {
