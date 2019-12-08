@@ -5029,6 +5029,11 @@ void Compiler::fgAddSkippedRegsInPromotedStructArg(LclVarDsc* varDsc,
 //
 void Compiler::fgFixupStructReturn(GenTree* callNode)
 {
+    char* nofixup = getenv("nofixup");
+    if (nofixup != nullptr)
+    {
+        return;
+    }
     assert(varTypeIsStruct(callNode));
 
     GenTreeCall* call              = callNode->AsCall();
@@ -9597,6 +9602,11 @@ GenTree* Compiler::fgMorphBlockOperand(GenTree* tree, var_types asgType, unsigne
         GenTreeLclVarCommon* lclNode          = nullptr;
         bool                 needsIndirection = true;
 
+        char* nofixup = getenv("nofixup");
+        if (nofixup != nullptr)
+        {
+            needsIndirection = false;
+        }
         if (effectiveVal->OperIsIndir())
         {
             indirTree     = effectiveVal->AsIndir();
