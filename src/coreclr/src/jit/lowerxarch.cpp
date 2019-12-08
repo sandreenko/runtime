@@ -57,8 +57,10 @@ void Lowering::LowerStoreLoc(GenTreeLclVarCommon* storeLoc)
 
         if (varDsc->lvIsSIMDType())
         {
+            // storeLoc should be SIMD as well.
             noway_assert(storeLoc->gtType != TYP_STRUCT);
         }
+
         unsigned size = genTypeSize(storeLoc);
         // If we are storing a constant into a local variable
         // we extend the size of the store here
@@ -99,6 +101,22 @@ void Lowering::LowerStoreLoc(GenTreeLclVarCommon* storeLoc)
         // We should only encounter this for lclVars that are lvDoNotEnregister.
         verifyLclFldDoNotEnregister(storeLoc->GetLclNum());
     }
+
+#ifdef DEBUG
+    if (storeLoc->gtOper == GT_STORE_LCL_VAR)
+    {
+        unsigned   varNum = storeLoc->GetLclNum();
+        LclVarDsc* varDsc = comp->lvaGetDesc(varNum);
+        GenTree*   src    = storeLoc->gtOp1;
+        // it can have struct type. That is an expected situation,
+        // like System.ArgIterator:GetNextArgType():System.RuntimeTypeHandle:this
+        //[1] 22 (0x016) stloc.0
+        //    STMT00007(IL 0x016... ? ? ? )
+        //    [000024] - A---------- * ASG       struct (copy)
+        //    [000022] D---------- - +-- * LCL_VAR   struct<System.RuntimeTypeHandle, 8> V01 loc0
+        //    [000021] ------------              \--* LCL_VAR   struct<System.RuntimeTypeHandle, 8> V06 tmp4
+    }
+#endif // DEBUG
     ContainCheckStoreLoc(storeLoc);
 }
 
@@ -221,105 +239,117 @@ void Lowering::LowerBlockStore(GenTreeBlk* blkNode)
     }
     else
     {
-        assert(src->OperIs(GT_IND, GT_LCL_VAR, GT_LCL_FLD));
-        src->SetContained();
-
-        if (src->OperIs(GT_IND))
+        if (src->OperIs(GT_IND, GT_LCL_VAR, GT_LCL_FLD))
         {
-            // TODO-Cleanup: Make sure that GT_IND lowering didn't mark the source address as contained.
-            // Sometimes the GT_IND type is a non-struct type and then GT_IND lowering may contain the
-            // address, not knowing that GT_IND is part of a block op that has containment restrictions.
-            src->AsIndir()->Addr()->ClearContained();
-        }
-
-        if (blkNode->OperIs(GT_STORE_OBJ))
-        {
-            if (!blkNode->AsObj()->GetLayout()->HasGCPtr())
-            {
-                blkNode->SetOper(GT_STORE_BLK);
-            }
-#ifndef JIT32_GCENCODER
-            else if (dstAddr->OperIsLocalAddr() && (size <= CPBLK_UNROLL_LIMIT))
-            {
-                // If the size is small enough to unroll then we need to mark the block as non-interruptible
-                // to actually allow unrolling. The generated code does not report GC references loaded in the
-                // temporary register(s) used for copying.
-                // This is not supported for the JIT32_GCENCODER.
-                blkNode->SetOper(GT_STORE_BLK);
-                blkNode->gtBlkOpGcUnsafe = true;
-            }
-#endif
-        }
-
-        if (blkNode->OperIs(GT_STORE_OBJ))
-        {
-            assert((dstAddr->TypeGet() == TYP_BYREF) || (dstAddr->TypeGet() == TYP_I_IMPL));
-
-            // If we have a long enough sequence of slots that do not require write barriers then
-            // we can use REP MOVSD/Q instead of a sequence of MOVSD/Q instructions. According to the
-            // Intel Manual, the sweet spot for small structs is between 4 to 12 slots of size where
-            // the entire operation takes 20 cycles and encodes in 5 bytes (loading RCX and REP MOVSD/Q).
-            unsigned nonGCSlots = 0;
-
-            if (dstAddr->OperIsLocalAddr())
-            {
-                // If the destination is on the stack then no write barriers are needed.
-                nonGCSlots = blkNode->GetLayout()->GetSlotCount();
-            }
-            else
-            {
-                // Otherwise a write barrier is needed for every GC pointer in the layout
-                // so we need to check if there's a long enough sequence of non-GC slots.
-                ClassLayout* layout = blkNode->GetLayout();
-                unsigned     slots  = layout->GetSlotCount();
-                for (unsigned i = 0; i < slots; i++)
-                {
-                    if (layout->IsGCPtr(i))
-                    {
-                        nonGCSlots = 0;
-                    }
-                    else
-                    {
-                        nonGCSlots++;
-
-                        if (nonGCSlots >= CPOBJ_NONGC_SLOTS_LIMIT)
-                        {
-                            break;
-                        }
-                    }
-                }
-            }
-
-            if (nonGCSlots >= CPOBJ_NONGC_SLOTS_LIMIT)
-            {
-                blkNode->gtBlkOpKind = GenTreeBlk::BlkOpKindRepInstr;
-            }
-            else
-            {
-                blkNode->gtBlkOpKind = GenTreeBlk::BlkOpKindUnroll;
-            }
-        }
-        else if (blkNode->OperIs(GT_STORE_BLK) && (size <= CPBLK_UNROLL_LIMIT))
-        {
-            blkNode->gtBlkOpKind = GenTreeBlk::BlkOpKindUnroll;
+            src->SetContained();
 
             if (src->OperIs(GT_IND))
             {
-                ContainBlockStoreAddress(blkNode, size, src->AsIndir()->Addr());
+                // TODO-Cleanup: Make sure that GT_IND lowering didn't mark the source address as contained.
+                // Sometimes the GT_IND type is a non-struct type and then GT_IND lowering may contain the
+                // address, not knowing that GT_IND is part of a block op that has containment restrictions.
+                src->AsIndir()->Addr()->ClearContained();
             }
 
-            ContainBlockStoreAddress(blkNode, size, dstAddr);
+            if (blkNode->OperIs(GT_STORE_OBJ))
+            {
+                if (!blkNode->AsObj()->GetLayout()->HasGCPtr())
+                {
+                    blkNode->SetOper(GT_STORE_BLK);
+                }
+#ifndef JIT32_GCENCODER
+                else if (dstAddr->OperIsLocalAddr() && (size <= CPBLK_UNROLL_LIMIT))
+                {
+                    // If the size is small enough to unroll then we need to mark the block as non-interruptible
+                    // to actually allow unrolling. The generated code does not report GC references loaded in the
+                    // temporary register(s) used for copying.
+                    // This is not supported for the JIT32_GCENCODER.
+                    blkNode->SetOper(GT_STORE_BLK);
+                    blkNode->gtBlkOpGcUnsafe = true;
+                }
+#endif
+            }
+
+            if (blkNode->OperIs(GT_STORE_OBJ))
+            {
+                assert((dstAddr->TypeGet() == TYP_BYREF) || (dstAddr->TypeGet() == TYP_I_IMPL));
+
+                // If we have a long enough sequence of slots that do not require write barriers then
+                // we can use REP MOVSD/Q instead of a sequence of MOVSD/Q instructions. According to the
+                // Intel Manual, the sweet spot for small structs is between 4 to 12 slots of size where
+                // the entire operation takes 20 cycles and encodes in 5 bytes (loading RCX and REP MOVSD/Q).
+                unsigned nonGCSlots = 0;
+
+                if (dstAddr->OperIsLocalAddr())
+                {
+                    // If the destination is on the stack then no write barriers are needed.
+                    nonGCSlots = blkNode->GetLayout()->GetSlotCount();
+                }
+                else
+                {
+                    // Otherwise a write barrier is needed for every GC pointer in the layout
+                    // so we need to check if there's a long enough sequence of non-GC slots.
+                    ClassLayout* layout = blkNode->GetLayout();
+                    unsigned     slots  = layout->GetSlotCount();
+                    for (unsigned i = 0; i < slots; i++)
+                    {
+                        if (layout->IsGCPtr(i))
+                        {
+                            nonGCSlots = 0;
+                        }
+                        else
+                        {
+                            nonGCSlots++;
+
+                            if (nonGCSlots >= CPOBJ_NONGC_SLOTS_LIMIT)
+                            {
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (nonGCSlots >= CPOBJ_NONGC_SLOTS_LIMIT)
+                {
+                    blkNode->gtBlkOpKind = GenTreeBlk::BlkOpKindRepInstr;
+                }
+                else
+                {
+                    blkNode->gtBlkOpKind = GenTreeBlk::BlkOpKindUnroll;
+                }
+            }
+            else if (blkNode->OperIs(GT_STORE_BLK) && (size <= CPBLK_UNROLL_LIMIT))
+            {
+                blkNode->gtBlkOpKind = GenTreeBlk::BlkOpKindUnroll;
+
+                if (src->OperIs(GT_IND))
+                {
+                    ContainBlockStoreAddress(blkNode, size, src->AsIndir()->Addr());
+                }
+
+                ContainBlockStoreAddress(blkNode, size, dstAddr);
+            }
+            else
+            {
+                assert(blkNode->OperIs(GT_STORE_BLK, GT_STORE_DYN_BLK));
+
+#ifdef _TARGET_AMD64_
+                blkNode->gtBlkOpKind = GenTreeBlk::BlkOpKindHelper;
+#else
+                // TODO-X86-CQ: Investigate whether a helper call would be beneficial on x86
+                blkNode->gtBlkOpKind = GenTreeBlk::BlkOpKindRepInstr;
+#endif
+            }
         }
         else
         {
-            assert(blkNode->OperIs(GT_STORE_BLK, GT_STORE_DYN_BLK));
-
-#ifdef _TARGET_AMD64_
-            blkNode->gtBlkOpKind = GenTreeBlk::BlkOpKindHelper;
-#else
-            // TODO-X86-CQ: Investigate whether a helper call would be beneficial on x86
-            blkNode->gtBlkOpKind = GenTreeBlk::BlkOpKindRepInstr;
-#endif
+            assert(src->OperIs(GT_BITCAST));
+            assert(varTypeIsStruct(src));
+            if (!blkNode->AsObj()->GetLayout()->HasGCPtr())
+            {
+                blkNode->SetOper(GT_STORE_BLK);
+                blkNode->gtBlkOpKind = GenTreeBlk::BlkOpKindUnroll;
+            }
         }
     }
 }

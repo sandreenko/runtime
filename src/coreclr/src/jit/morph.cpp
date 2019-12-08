@@ -5029,6 +5029,11 @@ void Compiler::fgAddSkippedRegsInPromotedStructArg(LclVarDsc* varDsc,
 //
 void Compiler::fgFixupStructReturn(GenTree* callNode)
 {
+    char* nofixup = getenv("nofixup");
+    if (nofixup != nullptr)
+    {
+        return;
+    }
     assert(varTypeIsStruct(callNode));
 
     GenTreeCall* call              = callNode->AsCall();
@@ -7388,6 +7393,12 @@ GenTree* Compiler::fgMorphPotentialTailCall(GenTreeCall* call)
             nodeTy = TYP_DOUBLE;
         }
 #endif
+        if (varTypeIsStruct(nodeTy))
+        {
+            // This is a register-returned struct. Return a 0.
+            // The actual return registers are hacked in lower and the register allocator.
+            nodeTy = TYP_INT;
+        }
         result = gtNewZeroConNode(genActualType(nodeTy));
         result = fgMorphTree(result);
     }
@@ -8891,7 +8902,8 @@ GenTree* Compiler::fgMorphOneAsgBlockOp(GenTree* tree)
 
                 if (dest == destLclVarTree)
                 {
-                    dest = gtNewIndir(asgType, gtNewOperNode(GT_ADDR, TYP_BYREF, dest));
+                    GenTree* addr = gtNewOperNode(GT_ADDR, TYP_BYREF, dest);
+                    dest          = gtNewIndir(asgType, addr);
                 }
             }
         }
@@ -9600,8 +9612,12 @@ GenTree* Compiler::fgMorphBlockOperand(GenTree* tree, var_types asgType, unsigne
         }
         else if (effectiveVal->TypeGet() != asgType)
         {
-            GenTree* addr = gtNewOperNode(GT_ADDR, TYP_BYREF, effectiveVal);
-            effectiveVal  = gtNewIndir(asgType, addr);
+            bool canTakeAddr = !effectiveVal->IsCall() && !effectiveVal->OperIsSIMD();
+            if (canTakeAddr)
+            {
+                GenTree* addr = gtNewOperNode(GT_ADDR, TYP_BYREF, effectiveVal);
+                effectiveVal  = gtNewIndir(asgType, addr);
+            }
         }
     }
     else
@@ -9623,6 +9639,11 @@ GenTree* Compiler::fgMorphBlockOperand(GenTree* tree, var_types asgType, unsigne
         {
             lclNode = effectiveVal->AsLclVarCommon();
         }
+        else if (effectiveVal->IsCall())
+        {
+            needsIndirection = false;
+        }
+
         if (lclNode != nullptr)
         {
             LclVarDsc* varDsc = &(lvaTable[lclNode->GetLclNum()]);

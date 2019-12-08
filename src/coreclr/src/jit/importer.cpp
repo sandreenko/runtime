@@ -1204,9 +1204,6 @@ GenTree* Compiler::impAssignStructPtr(GenTree*             destAddr,
 
             var_types returnType = (var_types)src->AsCall()->gtReturnType;
 
-            // We won't use a return buffer, so change the type of src->gtType to 'returnType'
-            src->gtType = genActualType(returnType);
-
             // First we try to change this to "LclVar/LclFld = call"
             //
             if ((destAddr->gtOper == GT_ADDR) && (destAddr->AsOp()->gtOp1->gtOper == GT_LCL_VAR))
@@ -1222,7 +1219,8 @@ GenTree* Compiler::impAssignStructPtr(GenTree*             destAddr,
                     // TODO-1stClassStructs: Eliminate this pessimization when we can more generally
                     // handle multireg returns.
                     lcl->gtFlags |= GTF_DONT_CSE;
-                    lvaTable[lcl->AsLclVarCommon()->GetLclNum()].lvIsMultiRegRet = true;
+                    LclVarDsc* varDsc       = lvaGetDesc(lcl->GetLclNum());
+                    varDsc->lvIsMultiRegRet = true;
                 }
                 else if (lcl->gtType != src->gtType)
                 {
@@ -1283,13 +1281,8 @@ GenTree* Compiler::impAssignStructPtr(GenTree*             destAddr,
         else
         {
             // Case of inline method returning a struct in one or more registers.
-            //
-            var_types returnType = (var_types)call->gtReturnType;
-
             // We won't need a return buffer
-            asgType      = returnType;
-            src->gtType  = genActualType(returnType);
-            call->gtType = src->gtType;
+            asgType = src->gtType;
 
             // !!! The destination could be on stack. !!!
             // This flag will let us choose the correct write barrier.
@@ -8989,6 +8982,11 @@ GenTree* Compiler::impFixupCallStructReturn(GenTreeCall* call, CORINFO_CLASS_HAN
     }
     else
     {
+        char* nofixup = getenv("nofixup");
+        if (nofixup != nullptr)
+        {
+            return call;
+        }
         assert(returnType != TYP_UNKNOWN);
 
         // See if the struct size is smaller than the return
@@ -9055,6 +9053,12 @@ GenTree* Compiler::impFixupStructReturnType(GenTree* op, CORINFO_CLASS_HANDLE re
 {
     assert(varTypeIsStruct(info.compRetType));
     assert(info.compRetBuffArg == BAD_VAR_NUM);
+
+    char* nofixup = getenv("nofixup");
+    if (nofixup != nullptr)
+    {
+        return op;
+    }
 
     JITDUMP("\nimpFixupStructReturnType: retyping\n");
     DISPTREE(op);

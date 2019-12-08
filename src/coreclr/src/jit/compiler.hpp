@@ -956,6 +956,7 @@ inline GenTree* Compiler::gtNewOperNode(genTreeOps oper, var_types type, GenTree
     assert((GenTree::OperKind(oper) & GTK_EXOP) ==
            0); // Can't use this to construct any types that extend unary/binary operator.
     assert(op1 != nullptr || oper == GT_RETFILT || oper == GT_NOP || (oper == GT_RETURN && type == TYP_VOID));
+    assert(oper != GT_ADDR || !(op1->IsCall() || op1->OperIsSIMD())); // Can't get address of some nodes.
 
     if (doSimplifications)
     {

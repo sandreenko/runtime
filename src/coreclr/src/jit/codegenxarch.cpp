@@ -2849,6 +2849,7 @@ BAILOUT:
 void CodeGen::genCodeForStoreBlk(GenTreeBlk* storeBlkNode)
 {
     assert(storeBlkNode->OperIs(GT_STORE_OBJ, GT_STORE_DYN_BLK, GT_STORE_BLK));
+    assert(!storeBlkNode->Data()->IsCall()); // Support that.
 
     if (storeBlkNode->OperIs(GT_STORE_OBJ))
     {
@@ -3168,126 +3169,145 @@ void CodeGen::genCodeForCpBlkUnroll(GenTreeBlk* node)
     unsigned  srcAddrIndexScale = 1;
     int       srcOffset         = 0;
     GenTree*  src               = node->Data();
+    emitter*  emit              = GetEmitter();
+    unsigned  size              = node->GetLayout()->GetSize();
 
-    assert(src->isContained());
+    assert(size <= INT32_MAX);
+    assert(dstOffset < (INT32_MAX - static_cast<int>(size)));
 
-    if (src->OperIs(GT_LCL_VAR, GT_LCL_FLD))
+    if (src->isContained())
     {
-        srcLclNum = src->AsLclVarCommon()->GetLclNum();
-
-        if (src->OperIs(GT_LCL_FLD))
+        if (src->OperIs(GT_LCL_VAR, GT_LCL_FLD))
         {
-            srcOffset = src->AsLclFld()->GetLclOffs();
+            srcLclNum = src->AsLclVarCommon()->GetLclNum();
+
+            if (src->OperIs(GT_LCL_FLD))
+            {
+                srcOffset = src->AsLclFld()->GetLclOffs();
+            }
+        }
+        else
+        {
+            assert(src->OperIs(GT_IND));
+            GenTree* srcAddr = src->AsIndir()->Addr();
+
+            if (!srcAddr->isContained())
+            {
+                srcAddrBaseReg = genConsumeReg(srcAddr);
+            }
+            else if (srcAddr->OperIsAddrMode())
+            {
+                GenTreeAddrMode* addrMode = srcAddr->AsAddrMode();
+
+                if (addrMode->HasBase())
+                {
+                    srcAddrBaseReg = genConsumeReg(addrMode->Base());
+                }
+
+                if (addrMode->HasIndex())
+                {
+                    srcAddrIndexReg   = genConsumeReg(addrMode->Index());
+                    srcAddrIndexScale = addrMode->GetScale();
+                }
+
+                srcOffset = addrMode->Offset();
+            }
+            else
+            {
+                assert(srcAddr->OperIsLocalAddr());
+                srcLclNum = srcAddr->AsLclVarCommon()->GetLclNum();
+
+                if (srcAddr->OperIs(GT_LCL_FLD_ADDR))
+                {
+                    srcOffset = srcAddr->AsLclFld()->GetLclOffs();
+                }
+            }
+        }
+        assert(srcOffset < (INT32_MAX - static_cast<int>(size)));
+
+        if (size >= XMM_REGSIZE_BYTES)
+        {
+            regNumber tempReg = node->GetSingleTempReg(RBM_ALLFLOAT);
+
+            for (unsigned regSize = XMM_REGSIZE_BYTES; size >= regSize;
+                 size -= regSize, srcOffset += regSize, dstOffset += regSize)
+            {
+                if (srcLclNum != BAD_VAR_NUM)
+                {
+                    emit->emitIns_R_S(INS_movdqu, EA_ATTR(regSize), tempReg, srcLclNum, srcOffset);
+                }
+                else
+                {
+                    emit->emitIns_R_ARX(INS_movdqu, EA_ATTR(regSize), tempReg, srcAddrBaseReg, srcAddrIndexReg,
+                                        srcAddrIndexScale, srcOffset);
+                }
+
+                if (dstLclNum != BAD_VAR_NUM)
+                {
+                    emit->emitIns_S_R(INS_movdqu, EA_ATTR(regSize), tempReg, dstLclNum, dstOffset);
+                }
+                else
+                {
+                    emit->emitIns_ARX_R(INS_movdqu, EA_ATTR(regSize), tempReg, dstAddrBaseReg, dstAddrIndexReg,
+                                        dstAddrIndexScale, dstOffset);
+                }
+            }
+
+            // TODO-CQ-XArch: On x86 we could copy 8 byte at once by using MOVQ instead of four 4 byte MOV stores.
+            // On x64 it may also be worth copying a 4/8 byte remainder using MOVD/MOVQ, that avoids the need to
+            // allocate a GPR just for the remainder.
+        }
+
+        if (size > 0)
+        {
+            regNumber tempReg = node->GetSingleTempReg(RBM_ALLINT);
+
+            for (unsigned regSize = REGSIZE_BYTES; size > 0;
+                 size -= regSize, srcOffset += regSize, dstOffset += regSize)
+            {
+                while (regSize > size)
+                {
+                    regSize /= 2;
+                }
+
+                if (srcLclNum != BAD_VAR_NUM)
+                {
+                    emit->emitIns_R_S(INS_mov, EA_ATTR(regSize), tempReg, srcLclNum, srcOffset);
+                }
+                else
+                {
+                    emit->emitIns_R_ARX(INS_mov, EA_ATTR(regSize), tempReg, srcAddrBaseReg, srcAddrIndexReg,
+                                        srcAddrIndexScale, srcOffset);
+                }
+
+                if (dstLclNum != BAD_VAR_NUM)
+                {
+                    emit->emitIns_S_R(INS_mov, EA_ATTR(regSize), tempReg, dstLclNum, dstOffset);
+                }
+                else
+                {
+                    emit->emitIns_ARX_R(INS_mov, EA_ATTR(regSize), tempReg, dstAddrBaseReg, dstAddrIndexReg,
+                                        dstAddrIndexScale, dstOffset);
+                }
+            }
         }
     }
     else
     {
-        assert(src->OperIs(GT_IND));
-        GenTree* srcAddr = src->AsIndir()->Addr();
+        assert(src->OperIs(GT_BITCAST));
+        // Check that in `size < REGSIZE_BYTES` case we do extensions etc.
+        assert(size <= REGSIZE_BYTES);
 
-        if (!srcAddr->isContained())
+        instruction ins      = ins_Store(node->TypeGet());
+        emitAttr    sizeAttr = EA_ATTR(size);
+        regNumber   srcReg   = src->GetRegNum();
+        if (dstLclNum != BAD_VAR_NUM)
         {
-            srcAddrBaseReg = genConsumeReg(srcAddr);
-        }
-        else if (srcAddr->OperIsAddrMode())
-        {
-            GenTreeAddrMode* addrMode = srcAddr->AsAddrMode();
-
-            if (addrMode->HasBase())
-            {
-                srcAddrBaseReg = genConsumeReg(addrMode->Base());
-            }
-
-            if (addrMode->HasIndex())
-            {
-                srcAddrIndexReg   = genConsumeReg(addrMode->Index());
-                srcAddrIndexScale = addrMode->GetScale();
-            }
-
-            srcOffset = addrMode->Offset();
+            emit->emitIns_S_R(ins, sizeAttr, srcReg, dstLclNum, dstOffset);
         }
         else
         {
-            assert(srcAddr->OperIsLocalAddr());
-            srcLclNum = srcAddr->AsLclVarCommon()->GetLclNum();
-
-            if (srcAddr->OperIs(GT_LCL_FLD_ADDR))
-            {
-                srcOffset = srcAddr->AsLclFld()->GetLclOffs();
-            }
-        }
-    }
-
-    emitter* emit = GetEmitter();
-    unsigned size = node->GetLayout()->GetSize();
-
-    assert(size <= INT32_MAX);
-    assert(srcOffset < (INT32_MAX - static_cast<int>(size)));
-    assert(dstOffset < (INT32_MAX - static_cast<int>(size)));
-
-    if (size >= XMM_REGSIZE_BYTES)
-    {
-        regNumber tempReg = node->GetSingleTempReg(RBM_ALLFLOAT);
-
-        for (unsigned regSize = XMM_REGSIZE_BYTES; size >= regSize;
-             size -= regSize, srcOffset += regSize, dstOffset += regSize)
-        {
-            if (srcLclNum != BAD_VAR_NUM)
-            {
-                emit->emitIns_R_S(INS_movdqu, EA_ATTR(regSize), tempReg, srcLclNum, srcOffset);
-            }
-            else
-            {
-                emit->emitIns_R_ARX(INS_movdqu, EA_ATTR(regSize), tempReg, srcAddrBaseReg, srcAddrIndexReg,
-                                    srcAddrIndexScale, srcOffset);
-            }
-
-            if (dstLclNum != BAD_VAR_NUM)
-            {
-                emit->emitIns_S_R(INS_movdqu, EA_ATTR(regSize), tempReg, dstLclNum, dstOffset);
-            }
-            else
-            {
-                emit->emitIns_ARX_R(INS_movdqu, EA_ATTR(regSize), tempReg, dstAddrBaseReg, dstAddrIndexReg,
-                                    dstAddrIndexScale, dstOffset);
-            }
-        }
-
-        // TODO-CQ-XArch: On x86 we could copy 8 byte at once by using MOVQ instead of four 4 byte MOV stores.
-        // On x64 it may also be worth copying a 4/8 byte remainder using MOVD/MOVQ, that avoids the need to
-        // allocate a GPR just for the remainder.
-    }
-
-    if (size > 0)
-    {
-        regNumber tempReg = node->GetSingleTempReg(RBM_ALLINT);
-
-        for (unsigned regSize = REGSIZE_BYTES; size > 0; size -= regSize, srcOffset += regSize, dstOffset += regSize)
-        {
-            while (regSize > size)
-            {
-                regSize /= 2;
-            }
-
-            if (srcLclNum != BAD_VAR_NUM)
-            {
-                emit->emitIns_R_S(INS_mov, EA_ATTR(regSize), tempReg, srcLclNum, srcOffset);
-            }
-            else
-            {
-                emit->emitIns_R_ARX(INS_mov, EA_ATTR(regSize), tempReg, srcAddrBaseReg, srcAddrIndexReg,
-                                    srcAddrIndexScale, srcOffset);
-            }
-
-            if (dstLclNum != BAD_VAR_NUM)
-            {
-                emit->emitIns_S_R(INS_mov, EA_ATTR(regSize), tempReg, dstLclNum, dstOffset);
-            }
-            else
-            {
-                emit->emitIns_ARX_R(INS_mov, EA_ATTR(regSize), tempReg, dstAddrBaseReg, dstAddrIndexReg,
-                                    dstAddrIndexScale, dstOffset);
-            }
+            emit->emitIns_ARX_R(ins, sizeAttr, srcReg, dstAddrBaseReg, dstAddrIndexReg, dstAddrIndexScale, dstOffset);
         }
     }
 }
@@ -3668,29 +3688,49 @@ void CodeGen::genCodeForCpObj(GenTreeObj* cpObjNode)
     // This is because these registers are incremented as we go through the struct.
     if (!source->IsLocal())
     {
-        assert(source->gtOper == GT_IND);
-        srcAddr                   = source->gtGetOp1();
-        GenTree* actualSrcAddr    = srcAddr->gtSkipReloadOrCopy();
+        assert(source->OperIs(GT_IND, GT_BITCAST));
         GenTree* actualDstAddr    = dstAddr->gtSkipReloadOrCopy();
-        unsigned srcLclVarNum     = BAD_VAR_NUM;
         unsigned dstLclVarNum     = BAD_VAR_NUM;
-        bool     isSrcAddrLiveOut = false;
         bool     isDstAddrLiveOut = false;
-        if (genIsRegCandidateLocal(actualSrcAddr))
-        {
-            srcLclVarNum     = actualSrcAddr->AsLclVarCommon()->GetLclNum();
-            isSrcAddrLiveOut = ((actualSrcAddr->gtFlags & (GTF_VAR_DEATH | GTF_SPILL)) == 0);
-        }
         if (genIsRegCandidateLocal(actualDstAddr))
         {
             dstLclVarNum     = actualDstAddr->AsLclVarCommon()->GetLclNum();
             isDstAddrLiveOut = ((actualDstAddr->gtFlags & (GTF_VAR_DEATH | GTF_SPILL)) == 0);
         }
-        assert((actualSrcAddr->GetRegNum() != REG_RSI) || !isSrcAddrLiveOut ||
-               ((srcLclVarNum == dstLclVarNum) && !isDstAddrLiveOut));
-        assert((actualDstAddr->GetRegNum() != REG_RDI) || !isDstAddrLiveOut ||
-               ((srcLclVarNum == dstLclVarNum) && !isSrcAddrLiveOut));
-        srcAddrType = srcAddr->TypeGet();
+
+        if (source->OperIs(GT_IND))
+        {
+            srcAddr                   = source->gtGetOp1();
+            GenTree* actualSrcAddr    = srcAddr->gtSkipReloadOrCopy();
+            unsigned srcLclVarNum     = BAD_VAR_NUM;
+            bool     isSrcAddrLiveOut = false;
+            if (genIsRegCandidateLocal(actualSrcAddr))
+            {
+                srcLclVarNum     = actualSrcAddr->AsLclVarCommon()->GetLclNum();
+                isSrcAddrLiveOut = ((actualSrcAddr->gtFlags & (GTF_VAR_DEATH | GTF_SPILL)) == 0);
+            }
+
+            assert((actualSrcAddr->GetRegNum() != REG_RSI) || !isSrcAddrLiveOut ||
+                   ((srcLclVarNum == dstLclVarNum) && !isDstAddrLiveOut));
+            assert((actualDstAddr->GetRegNum() != REG_RDI) || !isDstAddrLiveOut ||
+                   ((srcLclVarNum == dstLclVarNum) && !isSrcAddrLiveOut));
+            srcAddrType = srcAddr->TypeGet();
+        }
+        else
+        {
+            assert(source->OperIs(GT_BITCAST));
+            // Check that in `size < REGSIZE_BYTES` case we do extensions etc.
+            unsigned size = cpObjNode->GetLayout()->GetSize();
+            assert(size <= REGSIZE_BYTES);
+
+            instruction ins      = ins_Store(cpObjNode->TypeGet());
+            emitAttr    sizeAttr = EA_ATTR(size);
+            regNumber   srcReg   = source->GetRegNum();
+            dstLclVarNum         = actualDstAddr->AsLclVarCommon()->GetLclNum();
+            assert(dstLclVarNum != BAD_VAR_NUM);
+            GetEmitter()->emitIns_S_R(ins, sizeAttr, srcReg, dstLclVarNum, 0);
+            return;
+        }
     }
 #endif // DEBUG
 
