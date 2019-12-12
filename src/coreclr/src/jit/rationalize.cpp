@@ -359,9 +359,13 @@ void Rationalizer::RewriteAssignment(LIR::Use& use)
             {
                 // We need to construct a block node for the location.
                 // Modify lcl to be the address form.
+
+                unsigned   lclNum = location->AsLclVarCommon()->GetLclNum();
+                LclVarDsc* varDsc = comp->lvaGetDesc(lclNum);
+
                 location->SetOper(addrForm(locationOp));
-                LclVarDsc* varDsc     = &(comp->lvaTable[location->AsLclVarCommon()->GetLclNum()]);
-                location->gtType      = TYP_BYREF;
+                location->gtType = TYP_BYREF;
+
                 GenTreeBlk*  storeBlk = nullptr;
                 unsigned int size     = varDsc->lvExactSize;
 

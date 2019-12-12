@@ -13654,7 +13654,7 @@ GenTree* Compiler::fgMorphSmpOpOptional(GenTreeOp* tree)
     switch (oper)
     {
         case GT_ASG:
-            if (varTypeIsStruct(typ) && !tree->IsPhiDefn())
+            if (!tree->IsPhiDefn() && !tree->UseLclStore())
             {
                 if (tree->OperIsCopyBlkOp())
                 {

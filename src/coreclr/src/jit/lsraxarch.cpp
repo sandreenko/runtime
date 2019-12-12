@@ -1387,6 +1387,12 @@ int LinearScan::BuildBlockStore(GenTreeBlk* blkNode)
                     break;
 #endif
 
+                case GenTreeBlk::BlkOpKindOneCopy:
+                    dstAddrRegMask = RBM_ALLINT;
+                    srcRegMask     = RBM_LNGRET;
+                    sizeRegMask    = RBM_NONE;
+                    break;
+
                 default:
                     unreached();
             }

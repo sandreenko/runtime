@@ -145,8 +145,8 @@ void Lowering::LowerBlockStore(GenTreeBlk* blkNode)
     TryCreateAddrMode(blkNode->Addr(), false);
 
     GenTree* dstAddr = blkNode->Addr();
-    GenTree* src = blkNode->Data();
-    unsigned size = blkNode->Size();
+    GenTree* src     = blkNode->Data();
+    unsigned size    = blkNode->Size();
 
     if (blkNode->OperIsInitBlkOp())
     {
@@ -272,7 +272,7 @@ void Lowering::LowerBlockStore(GenTreeBlk* blkNode)
                     // Otherwise a write barrier is needed for every GC pointer in the layout
                     // so we need to check if there's a long enough sequence of non-GC slots.
                     ClassLayout* layout = blkNode->GetLayout();
-                    unsigned     slots = layout->GetSlotCount();
+                    unsigned     slots  = layout->GetSlotCount();
                     for (unsigned i = 0; i < slots; i++)
                     {
                         if (layout->IsGCPtr(i))
@@ -323,8 +323,18 @@ void Lowering::LowerBlockStore(GenTreeBlk* blkNode)
 #endif
             }
         }
+        else if (src->OperIs(GT_CALL))
         {
+            GenTreeCall* call = src->AsCall();
+            assert(call->IsValue());
+            CORINFO_CLASS_HANDLE        retClsHnd = call->gtRetClsHnd;
+            Compiler::structPassingKind howToReturnStruct;
+            var_types                   returnType = comp->getReturnTypeForStruct(retClsHnd, &howToReturnStruct);
+            assert(!varTypeIsStruct(returnType));
+            returnType = genActualType(returnType);
 
+            blkNode->gtBlkOpKind = GenTreeBlk::BlkOpKindOneCopy;
+            // blkNode->ChangeOper(GT_STORE_LCL_VAR);
         }
         else
         {

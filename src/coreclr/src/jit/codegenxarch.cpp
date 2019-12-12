@@ -4652,7 +4652,7 @@ void CodeGen::genCodeForStoreLclVar(GenTreeLclVar* tree)
     }
     else
     {
-        noway_assert(targetType != TYP_STRUCT);
+        //noway_assert(targetType != TYP_STRUCT);
         assert(!varTypeIsFloating(targetType) || (targetType == op1->TypeGet()));
 
         unsigned   lclNum = tree->GetLclNum();
@@ -4693,9 +4693,32 @@ void CodeGen::genCodeForStoreLclVar(GenTreeLclVar* tree)
 
         if (targetReg == REG_NA)
         {
+            emitAttr size = EA_UNKNOWN;
+            char* nofixup = getenv("nofixup");
+            if (nofixup != nullptr)
+            {
+                if (!varTypeIsStruct(tree->TypeGet()))
+                {
+                    size = emitTypeSize(targetType);
+                }
+                else
+                {
+                    unsigned lclNum = tree->AsLclVarCommon()->GetLclNum();
+                    LclVarDsc* varDsc = compiler->lvaGetDesc(lclNum);
+                    size = (emitAttr)varDsc->lvExactSize;
+                    if (size == 12)
+                    {
+                        size = emitTypeSize(targetType);
+                    }
+                }
+            }
+            else
+            {
+                size = emitTypeSize(targetType);
+            }
             // stack store
             emit->emitInsStoreLcl(ins_Store(targetType, compiler->isSIMDTypeLocalAligned(lclNum)),
-                                  emitTypeSize(targetType), tree);
+                size, tree);
             varDsc->SetRegNum(REG_STK);
         }
         else

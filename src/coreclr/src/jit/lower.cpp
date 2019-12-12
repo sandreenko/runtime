@@ -305,7 +305,7 @@ GenTree* Lowering::LowerNode(GenTree* node)
                 GenTree* src = node->gtGetOp1();
                 assert((src->OperGet() == GT_CALL) && src->AsCall()->HasMultiRegRetVal());
 #else  // !FEATURE_MULTIREG_RET
-                assert(!"Unexpected struct local store in Lowering");
+                //assert(!"Unexpected struct local store in Lowering");
 #endif // !FEATURE_MULTIREG_RET
             }
             LowerStoreLoc(node->AsLclVarCommon());

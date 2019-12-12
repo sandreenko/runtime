@@ -1126,6 +1126,8 @@ public:
         return (gtOper == GT_CNS_INT) || (OperIsInitVal() && (gtGetOp1()->gtOper == GT_CNS_INT));
     }
 
+    bool UseLclStore();
+
     bool OperIsBlkOp();
     bool OperIsCopyBlkOp();
     bool OperIsInitBlkOp();
@@ -5113,6 +5115,7 @@ public:
         BlkOpKindRepInstr,
 #endif
         BlkOpKindUnroll,
+        BlkOpKindOneCopy
     } gtBlkOpKind;
 
 #ifndef JIT32_GCENCODER
@@ -6439,9 +6442,43 @@ struct GenTreeCC final : public GenTree
 // be defined already.
 //------------------------------------------------------------------------
 
+inline bool GenTree::UseLclStore()
+{
+    assert((gtOper == GT_ASG));
+    GenTree* dst = AsOp()->gtOp1;
+
+
+    char* nofixup = getenv("nofixup");
+    if (nofixup != nullptr)
+    {
+
+
+        if (!varTypeIsStruct(dst))
+        {
+            return true;
+        }
+
+        if (dst->OperIs(GT_LCL_VAR))
+        {
+            return true;
+        }
+        return false;
+    }
+    else
+    {
+        return !varTypeIsStruct(dst);
+    }
+}
+
 inline bool GenTree::OperIsBlkOp()
 {
-    return ((gtOper == GT_ASG) && varTypeIsStruct(AsOp()->gtOp1)) || (OperIsBlk() && (AsBlk()->Data() != nullptr));
+    bool structAsg = false;
+    if ((gtOper == GT_ASG))
+    {
+        structAsg = !UseLclStore();
+    }
+    bool blockWithData = (OperIsBlk() && (AsBlk()->Data() != nullptr));
+    return structAsg || blockWithData;
 }
 
 inline bool GenTree::OperIsDynBlkOp()

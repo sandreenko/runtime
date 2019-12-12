@@ -6630,7 +6630,7 @@ void Compiler::gtBlockOpInit(GenTree* result, GenTree* dst, GenTree* srcOrFillVa
 {
     if (!result->OperIsBlkOp())
     {
-        assert(dst->TypeGet() != TYP_STRUCT);
+        assert(result->UseLclStore());
         return;
     }
 
@@ -10966,6 +10966,9 @@ void Compiler::gtDispTree(GenTree*     tree,
                         printf(" (Helper)");
                         break;
 #endif
+                    case GenTreeBlk::BlkOpKindOneCopy:
+                        printf(" (One instruction copy)");
+                        break;
                     default:
                         unreached();
                 }
