@@ -1507,15 +1507,11 @@ bool LinearScan::isRegCandidate(LclVarDsc* varDsc)
             break;
 
 #ifdef FEATURE_SIMD
+        case TYP_SIMD8:
         case TYP_SIMD12:
         case TYP_SIMD16:
         case TYP_SIMD32:
             return !varDsc->lvPromoted;
-
-        // TODO-1stClassStructs: Move TYP_SIMD8 up with the other SIMD types, after handling the param issue
-        // (passing & returning as TYP_LONG).
-        case TYP_SIMD8:
-            return false;
 #endif // FEATURE_SIMD
 
         case TYP_STRUCT:
@@ -4443,6 +4439,7 @@ void LinearScan::spillGCRefs(RefPosition* killRefPosition)
     // For each physical register that can hold a GC type,
     // if it is occupied by an interval of a GC type, spill that interval.
     regMaskTP candidateRegs = killRefPosition->registerAssignment;
+    INDEBUG(bool killedRegs = false);
     while (candidateRegs != RBM_NONE)
     {
         regMaskTP nextRegBit = genFindLowestBit(candidateRegs);
@@ -4470,11 +4467,12 @@ void LinearScan::spillGCRefs(RefPosition* killRefPosition)
         }
         if (needsKill)
         {
-            INDEBUG(dumpLsraAllocationEvent(LSRA_EVENT_KILL_GC_REF, nullptr, nextReg, nullptr));
+            INDEBUG(killedRegs = true);
             unassignPhysReg(regRecord, assignedInterval->recentRefPosition);
         }
     }
-    INDEBUG(dumpLsraAllocationEvent(LSRA_EVENT_DONE_KILL_GC_REFS, nullptr, REG_NA, nullptr));
+    INDEBUG(dumpLsraAllocationEvent(killedRegs ? LSRA_EVENT_DONE_KILL_GC_REFS : LSRA_EVENT_NO_GC_KILLS, nullptr, REG_NA,
+                                    nullptr));
 }
 
 //------------------------------------------------------------------------
@@ -9716,9 +9714,14 @@ void LinearScan::dumpLsraAllocationEvent(LsraDumpEvent event,
             dumpRegRecords();
             break;
 
-        // Done with GC Kills
         case LSRA_EVENT_DONE_KILL_GC_REFS:
-            printf(indentFormat, "  DoneKillGC ");
+            dumpRefPositionShort(activeRefPosition, currentBlock);
+            printf("Done       ");
+            break;
+
+        case LSRA_EVENT_NO_GC_KILLS:
+            dumpRefPositionShort(activeRefPosition, currentBlock);
+            printf("None       ");
             break;
 
         // Block boundaries
@@ -9831,7 +9834,9 @@ void LinearScan::dumpLsraAllocationEvent(LsraDumpEvent event,
             break;
 
         default:
-            unreached();
+            printf("????? %-4s ", getRegName(reg));
+            dumpRegRecords();
+            break;
     }
 }
 

@@ -1363,6 +1363,7 @@ public:
     instruction ins_Move_Extend(var_types srcType, bool srcInReg);
 
     instruction ins_Copy(var_types dstType);
+    instruction ins_Copy(regNumber srcReg, var_types dstType);
     instruction ins_CopyIntToFloat(var_types srcType, var_types dstTyp);
     instruction ins_CopyFloatToInt(var_types srcType, var_types dstTyp);
     static instruction ins_FloatStore(var_types type = TYP_DOUBLE);

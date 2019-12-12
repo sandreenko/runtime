@@ -1659,12 +1659,12 @@ instruction CodeGenInterface::ins_Load(var_types srcType, bool aligned /*=false*
 }
 
 /*****************************************************************************
- *
- *  Get the machine dependent instruction for performing a reg-reg copy for dstType
- *
- *  Parameters
- *      dstType   - destination type
- */
+*
+*  Get the machine dependent instruction for performing a reg-reg copy for dstType
+*
+*  Parameters
+*      dstType   - destination type
+*/
 instruction CodeGen::ins_Copy(var_types dstType)
 {
 #if defined(_TARGET_XARCH_)
@@ -1700,10 +1700,60 @@ instruction CodeGen::ins_Copy(var_types dstType)
     {
         return INS_mov;
     }
-#elif defined(_TARGET_X86_)
+#else // _TARGET_*
+#error "Unknown _TARGET_"
+#endif
+}
+
+//------------------------------------------------------------------------
+//  ins_Copy: Get the machine dependent instruction for performing a reg-reg copy
+//            from srcReg to a register of dstType.
+//
+// Arguments:
+//      srcReg  - source register
+//      dstType - destination type
+//
+// Notes:
+//    This assumes the size of the value in 'srcReg' is the same as the size of
+//    'dstType'.
+//
+instruction CodeGen::ins_Copy(regNumber srcReg, var_types dstType)
+{
+    bool dstIsFloatReg = isFloatRegType(dstType);
+    bool srcIsFloatReg = genIsValidFloatReg(srcReg);
+    if (srcIsFloatReg == dstIsFloatReg)
+    {
+        return ins_Copy(dstType);
+    }
+#if defined(_TARGET_XARCH_)
+    if (dstIsFloatReg)
+    {
+        return INS_mov_i2xmm;
+    }
+    else
+    {
+        return INS_mov_xmm2i;
+    }
+#elif defined(_TARGET_ARM64_)
+    if (dstIsFloatReg)
+    {
+        return INS_fmov;
+    }
+    else
+    {
+        return INS_mov;
+    }
+#elif defined(_TARGET_ARM_)
+    // No SIMD support yet
     assert(!varTypeIsSIMD(dstType));
-    assert(!varTypeIsFloating(dstType));
-    return INS_mov;
+    if (dstIsFloatReg)
+    {
+        return (dstType == TYP_DOUBLE) ? INS_vmov_i2d : INS_vmov_i2f;
+    }
+    else
+    {
+        return (dstType == TYP_LONG) ? INS_vmov_d2i : INS_vmov_f2i;
+    }
 #else // _TARGET_*
 #error "Unknown _TARGET_"
 #endif
@@ -2105,7 +2155,24 @@ instruction CodeGen::ins_FloatConv(var_types to, var_types from)
     }
 }
 
-#endif // #elif defined(_TARGET_ARM_)
+#elif defined(_TARGET_ARM64_)
+instruction CodeGen::ins_CopyIntToFloat(var_types srcType, var_types dstType)
+{
+    assert((dstType == TYP_FLOAT) || (dstType == TYP_DOUBLE));
+    assert((srcType == TYP_INT) || (srcType == TYP_UINT) || (srcType == TYP_LONG) || (srcType == TYP_ULONG));
+
+    return INS_mov;
+}
+
+instruction CodeGen::ins_CopyFloatToInt(var_types srcType, var_types dstType)
+{
+    assert((srcType == TYP_FLOAT) || (srcType == TYP_DOUBLE));
+    assert((dstType == TYP_INT) || (dstType == TYP_UINT) || (dstType == TYP_LONG) || (dstType == TYP_ULONG));
+
+    return INS_mov;
+}
+
+#endif // _TARGET_ARM64_
 
 /*****************************************************************************
  *

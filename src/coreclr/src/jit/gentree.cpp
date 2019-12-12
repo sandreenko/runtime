@@ -14827,7 +14827,8 @@ GenTree* Compiler::gtNewTempAssign(
     }
 
 #ifdef DEBUG
-    /* Make sure the actual types match               */
+    // Make sure the actual types match.
+    bool needBitCast = false;
     if (genActualType(valTyp) != genActualType(dstTyp))
     {
         // Plus some other exceptions that are apparently legal:
@@ -14846,6 +14847,11 @@ GenTree* Compiler::gtNewTempAssign(
         else if (JitConfig.JitObjectStackAllocation() && (dstTyp == TYP_BYREF) && (valTyp == TYP_REF))
         {
             ok = true;
+        }
+        else if (genTypeSize(valTyp) == genTypeSize(dstTyp))
+        {
+            ok          = true;
+            needBitCast = true;
         }
 
         if (!ok)
@@ -14878,6 +14884,7 @@ GenTree* Compiler::gtNewTempAssign(
     CORINFO_CLASS_HANDLE structHnd = gtGetStructHandleIfPresent(val);
     if (varTypeIsStruct(valTyp) && ((structHnd != NO_CLASS_HANDLE) || (varTypeIsSIMD(valTyp))))
     {
+        assert(!needBitCast);
         // The struct value may be be a child of a GT_COMMA.
         GenTree* valx = val->gtEffectiveVal(/*commaOnly*/ true);
 
@@ -14895,6 +14902,10 @@ GenTree* Compiler::gtNewTempAssign(
     }
     else
     {
+        if (needBitCast)
+        {
+            val = gtNewOperNode(GT_BITCAST, dstTyp, val);
+        }
         asg = gtNewAssignNode(dest, val);
     }
 
