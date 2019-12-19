@@ -3178,9 +3178,12 @@ GenTree* Compiler::impSIMDIntrinsic(OPCODE                opcode,
     // block ops.
     if (doCopyBlk)
     {
-        GenTree* dest = new (this, GT_BLK)
-            GenTreeBlk(GT_BLK, simdType, copyBlkDst, typGetBlkLayout(getSIMDTypeSizeInBytes(clsHnd)));
-        dest->gtFlags |= GTF_GLOB_REF;
+        //GenTree* dest = new (this, GT_BLK)
+        //    GenTreeBlk(GT_BLK, simdType, copyBlkDst, typGetBlkLayout(getSIMDTypeSizeInBytes(clsHnd)));
+        //dest->gtFlags |= GTF_GLOB_REF;
+        assert(copyBlkDst->OperIs(GT_ADDR));
+        GenTree* dest = copyBlkDst->AsOp()->gtOp1;
+        assert(dest->OperIsLocal());
         retVal = gtNewBlkOpNode(dest, simdTree,
                                 false, // not volatile
                                 true); // copyBlock

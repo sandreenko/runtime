@@ -4953,7 +4953,10 @@ void Compiler::fgMakeOutgoingStructArgCopy(GenTreeCall*         call,
 
     // Copy the valuetype to the temp
     GenTree* copyBlk = gtNewBlkOpNode(dest, argx, false /* not volatile */, true /* copyBlock */);
-    copyBlk          = fgMorphCopyBlock(copyBlk);
+#ifdef DEBUG
+    dest->gtDebugFlags |= GTF_DEBUG_NODE_MORPHED;
+    copyBlk->gtDebugFlags |= GTF_DEBUG_NODE_MORPHED;
+#endif
 
 #if FEATURE_FIXED_OUT_ARGS
 
@@ -14831,7 +14834,7 @@ void Compiler::fgMorphTreeDone(GenTree* tree,
         //
         // But we shouldn't be running local assertion prop on these,
         // as local prop gets disabled when we run global prop.
-        assert(!tree->OperIs(GT_STORE_LCL_VAR, GT_STORE_LCL_FLD));
+        //assert(!tree->OperIs(GT_STORE_LCL_VAR, GT_STORE_LCL_FLD));
 
         // DefinesLocal can return true for some BLK op uses, so
         // check what gets assigned only when we're at an assignment.

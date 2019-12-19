@@ -2016,10 +2016,18 @@ inline
     bool fConservative = false;
     if (varNum >= 0)
     {
-        LclVarDsc* varDsc;
-
         assert((unsigned)varNum < lvaCount);
-        varDsc               = lvaTable + varNum;
+
+        LclVarDsc* varDsc = lvaGetDesc(varNum);
+        if (varDsc->lvRefCnt() == 0 && !varDsc->lvOnFrame && varDsc->lvPromotedStruct())
+        {
+            unsigned promotedLclVarNum = varDsc->lvFieldLclStart;
+            LclVarDsc* firstPromotedField = lvaGetDesc(promotedLclVarNum);
+            assert(firstPromotedField->lvOnFrame);
+            varDsc->lvOnFrame = true;
+            varDsc->lvStkOffs = firstPromotedField->lvStkOffs;
+        }
+
         bool isPrespilledArg = false;
 #if defined(_TARGET_ARM_) && defined(PROFILING_SUPPORTED)
         isPrespilledArg = varDsc->lvIsParam && compIsProfilerHookNeeded() &&
@@ -2041,6 +2049,7 @@ inline
             assert((varDsc->lvIsParam && !varDsc->lvIsRegArg) || isPrespilledArg);
 #endif // !_TARGET_AMD64_
         }
+
 
         FPbased = varDsc->lvFramePointerBased;
 

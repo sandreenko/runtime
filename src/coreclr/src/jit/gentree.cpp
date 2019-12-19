@@ -5313,6 +5313,10 @@ bool GenTree::OperRequiresAsgFlag()
     {
         return true;
     }
+    if (OperIs(GT_STORE_LCL_VAR, GT_STORE_LCL_FLD))
+    {
+        return true;
+    }
 #ifdef FEATURE_HW_INTRINSICS
     if (gtOper == GT_HWINTRINSIC)
     {
@@ -6759,10 +6763,57 @@ GenTree* Compiler::gtNewBlkOpNode(GenTree* dst, GenTree* srcOrFillVal, bool isVo
             }
         }
     }
+    assert(dst->OperIsLocal());
 
-    GenTree* result = gtNewAssignNode(dst, srcOrFillVal);
-    gtBlockOpInit(result, dst, srcOrFillVal, isVolatile);
-    return result;
+    GenTreeLclVar* dstLcl = dst->AsLclVar();
+
+    //if (dst->OperIsLocal())
+    //{
+    //    dstLcl = dst->AsLclVar();
+    //}
+    //else
+    //{
+    //    assert(dst->OperIsBlk());
+    //    GenTree* addr = dst->AsBlk()->Addr();
+    //    assert(addr->OperIs(GT_ADDR));
+    //    dstLcl = addr->AsOp()->gtOp1->AsLclVar();
+    //}
+
+    unsigned lclNum = dstLcl->GetLclNum();
+    LclVarDsc* varDsc = lvaGetDesc(lclNum);
+    unsigned int size = varDsc->lvExactSize;
+
+    if (isCopyBlock)
+    {
+        GenTree* result = new (this, GT_STORE_LCL_VAR) GenTreeLclVar(GT_STORE_LCL_VAR, varDsc->TypeGet(), lclNum);
+        result->gtFlags |= GTF_ASG;
+        result->gtFlags |= GTF_VAR_DEF;
+        result->AsOp()->gtOp1 = srcOrFillVal;
+        return result;
+       
+    }
+    else // init
+    {
+        GenTreeBlk* storeBlk = nullptr;
+        dstLcl->ChangeOper(GT_LCL_VAR_ADDR);
+        dstLcl->ChangeType(TYP_BYREF);
+        if (varDsc->HasGCPtr())
+        {
+            CORINFO_CLASS_HANDLE structHnd = varDsc->lvVerTypeInfo.GetClassHandle();
+            GenTreeObj* objNode = gtNewObjNode(structHnd, dstLcl);
+            objNode->ChangeOper(GT_STORE_OBJ);
+            objNode->SetData(srcOrFillVal);
+            storeBlk = objNode;
+        }
+        else
+        {
+            storeBlk = new (this, GT_STORE_BLK)
+                GenTreeBlk(GT_STORE_BLK, TYP_STRUCT, dstLcl, srcOrFillVal, typGetBlkLayout(size));
+        }
+        storeBlk->gtFlags |= GTF_ASG;
+        storeBlk->gtFlags |= ((dstLcl->gtFlags | srcOrFillVal->gtFlags) & GTF_ALL_EFFECT);
+        return storeBlk;
+    }
 }
 
 //------------------------------------------------------------------------

@@ -81,7 +81,7 @@ extern "C" DLLEXPORT void __stdcall jitStartup(ICorJitHost* jitHost)
     const WCHAR* jitStdOutFile = JitConfig.JitStdOutFile();
     if (jitStdOutFile != nullptr)
     {
-        jitstdout = _wfopen(jitStdOutFile, W("a"));
+        jitstdout = _wfopen(jitStdOutFile, W("w"));
         assert(jitstdout != nullptr);
     }
 #endif // DEBUG

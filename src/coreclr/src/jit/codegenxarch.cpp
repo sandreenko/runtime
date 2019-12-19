@@ -5518,7 +5518,7 @@ void CodeGen::genCallInstruction(GenTreeCall* call)
     }
     else
     {
-        assert(!varTypeIsStruct(call));
+        //assert(!varTypeIsStruct(call));
 
         if (call->gtType == TYP_REF)
         {

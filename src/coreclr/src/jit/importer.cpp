@@ -864,7 +864,6 @@ GenTreeCall::Use* Compiler::impPopCallArgs(unsigned count, CORINFO_SIG_INFO* sig
 {
     assert(sig == nullptr || count == sig->numArgs);
 
-    CORINFO_CLASS_HANDLE structType;
     GenTreeCall::Use*    argList;
 
     if (Target::g_tgtArgOrder == Target::ARG_ORDER_R2L)
@@ -882,41 +881,41 @@ GenTreeCall::Use* Compiler::impPopCallArgs(unsigned count, CORINFO_SIG_INFO* sig
         typeInfo   ti   = se.seTypeInfo;
         GenTree*   temp = se.val;
 
-        if (varTypeIsStruct(temp))
-        {
-            // Morph trees that aren't already OBJs or MKREFANY to be OBJs
-            assert(ti.IsType(TI_STRUCT));
-            structType = ti.GetClassHandleForValueClass();
-
-            bool forceNormalization = false;
-            if (varTypeIsSIMD(temp))
-            {
-                // We need to ensure that fgMorphArgs will use the correct struct handle to ensure proper
-                // ABI handling of this argument.
-                // Note that this can happen, for example, if we have a SIMD intrinsic that returns a SIMD type
-                // with a different baseType than we've seen.
-                // TODO-Cleanup: Consider whether we can eliminate all of these cases.
-                if (gtGetStructHandleIfPresent(temp) != structType)
-                {
-                    forceNormalization = true;
-                }
-            }
-#ifdef DEBUG
-            if (verbose)
-            {
-                printf("Calling impNormStructVal on:\n");
-                gtDispTree(temp);
-            }
-#endif
-            temp = impNormStructVal(temp, structType, (unsigned)CHECK_SPILL_ALL, forceNormalization);
-#ifdef DEBUG
-            if (verbose)
-            {
-                printf("resulting tree:\n");
-                gtDispTree(temp);
-            }
-#endif
-        }
+//        if (varTypeIsStruct(temp))
+//        {
+//            // Morph trees that aren't already OBJs or MKREFANY to be OBJs
+//            assert(ti.IsType(TI_STRUCT));
+//            CORINFO_CLASS_HANDLE structType = ti.GetClassHandleForValueClass();
+//
+//            bool forceNormalization = false;
+//            if (varTypeIsSIMD(temp))
+//            {
+//                // We need to ensure that fgMorphArgs will use the correct struct handle to ensure proper
+//                // ABI handling of this argument.
+//                // Note that this can happen, for example, if we have a SIMD intrinsic that returns a SIMD type
+//                // with a different baseType than we've seen.
+//                // TODO-Cleanup: Consider whether we can eliminate all of these cases.
+//                if (gtGetStructHandleIfPresent(temp) != structType)
+//                {
+//                    forceNormalization = true;
+//                }
+//            }
+//#ifdef DEBUG
+//            if (verbose)
+//            {
+//                printf("Calling impNormStructVal on:\n");
+//                gtDispTree(temp);
+//            }
+//#endif
+//            temp = impNormStructVal(temp, structType, (unsigned)CHECK_SPILL_ALL, forceNormalization);
+//#ifdef DEBUG
+//            if (verbose)
+//            {
+//                printf("resulting tree:\n");
+//                gtDispTree(temp);
+//            }
+//#endif
+//        }
 
         /* NOTE: we defer bashing the type for I_IMPL to fgMorphArgs */
         argList = gtPrependNewCallArg(temp, argList);
@@ -15589,7 +15588,7 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                 goto EVAL_APPEND;
 
             case CEE_INITOBJ:
-
+            {
                 assertImp(sz == sizeof(unsigned));
 
                 _impResolveToken(CORINFO_TOKENKIND_Class);
@@ -15598,22 +15597,23 @@ void Compiler::impImportBlockCode(BasicBlock* block)
 
                 if (tiVerificationNeeded)
                 {
-                    typeInfo tiTo    = impStackTop().seTypeInfo;
+                    typeInfo tiTo = impStackTop().seTypeInfo;
                     typeInfo tiInstr = verMakeTypeInfo(resolvedToken.hClass);
 
                     Verify(tiTo.IsByRef(), "byref expected");
                     Verify(!tiTo.IsReadonlyByRef(), "write to readonly byref");
 
                     Verify(tiCompatibleWith(tiInstr, tiTo.DereferenceByRef(), false),
-                           "type operand incompatible with type of address");
+                        "type operand incompatible with type of address");
                 }
 
                 size = info.compCompHnd->getClassSize(resolvedToken.hClass); // Size
-                op2  = gtNewIconNode(0);                                     // Value
-                op1  = impPopStack().val;                                    // Dest
-                op1  = gtNewBlockVal(op1, size);
-                op1  = gtNewBlkOpNode(op1, op2, (prefixFlags & PREFIX_VOLATILE) != 0, false);
+                op2 = gtNewIconNode(0);                                     // Value
+                GenTree* dstAddr = impPopStack().val;                                    // Dest
+                GenTree* blockVal = gtNewBlockVal(dstAddr, size);
+                op1 = gtNewBlkOpNode(blockVal, op2, (prefixFlags & PREFIX_VOLATILE) != 0, /* is copy */ false);
                 goto SPILL_APPEND;
+            }
 
             case CEE_INITBLK:
 
