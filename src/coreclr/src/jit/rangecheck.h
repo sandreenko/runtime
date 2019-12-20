@@ -222,82 +222,12 @@ struct Range
         return lLimit;
     }
 
-#ifdef DEBUG
-    char* ToString(CompAllocator alloc)
-    {
-        size_t size = 64;
-        char*  buf  = alloc.allocate<char>(size);
-        sprintf_s(buf, size, "<%s, %s>", lLimit.ToString(alloc), uLimit.ToString(alloc));
-        return buf;
-    }
-#endif
-};
-
-// Helpers for operations performed on ranges
-struct RangeOps
-{
-    // Given a constant limit in "l1", add it to l2 and mutate "l2".
-    static Limit AddConstantLimit(Limit& l1, Limit& l2)
-    {
-        assert(l1.IsConstant());
-        Limit l = l2;
-        if (l.AddConstant(l1.GetConstant()))
-        {
-            return l;
-        }
-        else
-        {
-            return Limit(Limit::keUnknown);
-        }
-    }
-
-    // Given two ranges "r1" and "r2", perform an add operation on the
-    // ranges.
-    static Range Add(Range& r1, Range& r2)
-    {
-        Limit& r1lo = r1.LowerLimit();
-        Limit& r1hi = r1.UpperLimit();
-        Limit& r2lo = r2.LowerLimit();
-        Limit& r2hi = r2.UpperLimit();
-
-        Range result = Limit(Limit::keUnknown);
-
-        // Check lo ranges if they are dependent and not unknown.
-        if ((r1lo.IsDependent() && !r1lo.IsUnknown()) || (r2lo.IsDependent() && !r2lo.IsUnknown()))
-        {
-            result.lLimit = Limit(Limit::keDependent);
-        }
-        // Check hi ranges if they are dependent and not unknown.
-        if ((r1hi.IsDependent() && !r1hi.IsUnknown()) || (r2hi.IsDependent() && !r2hi.IsUnknown()))
-        {
-            result.uLimit = Limit(Limit::keDependent);
-        }
-
-        if (r1lo.IsConstant())
-        {
-            result.lLimit = AddConstantLimit(r1lo, r2lo);
-        }
-        if (r2lo.IsConstant())
-        {
-            result.lLimit = AddConstantLimit(r2lo, r1lo);
-        }
-        if (r1hi.IsConstant())
-        {
-            result.uLimit = AddConstantLimit(r1hi, r2hi);
-        }
-        if (r2hi.IsConstant())
-        {
-            result.uLimit = AddConstantLimit(r2hi, r1hi);
-        }
-        return result;
-    }
-
     // Given two ranges "r1" and "r2", do a Phi merge. If "monIncreasing" is true,
     // then ignore the dependent variables for the lower bound but not for the upper bound.
-    static Range Merge(Range& r1, Range& r2, bool monIncreasing)
+    void Merge(Range& r2, bool monIncreasing)
     {
-        Limit& r1lo = r1.LowerLimit();
-        Limit& r1hi = r1.UpperLimit();
+        Limit& r1lo = LowerLimit();
+        Limit& r1hi = UpperLimit();
         Limit& r2lo = r2.LowerLimit();
         Limit& r2hi = r2.UpperLimit();
 
@@ -377,8 +307,79 @@ struct RangeOps
                 result.uLimit = r2hi;
             }
         }
+        *this = result;
+    }
+
+#ifdef DEBUG
+    char* ToString(CompAllocator alloc)
+    {
+        size_t size = 64;
+        char*  buf  = alloc.allocate<char>(size);
+        sprintf_s(buf, size, "<%s, %s>", lLimit.ToString(alloc), uLimit.ToString(alloc));
+        return buf;
+    }
+#endif
+};
+
+// Helpers for operations performed on ranges
+struct RangeOps
+{
+    // Given a constant limit in "l1", add it to l2 and mutate "l2".
+    static Limit AddConstantLimit(Limit& l1, Limit& l2)
+    {
+        assert(l1.IsConstant());
+        Limit l = l2;
+        if (l.AddConstant(l1.GetConstant()))
+        {
+            return l;
+        }
+        else
+        {
+            return Limit(Limit::keUnknown);
+        }
+    }
+
+    // Given two ranges "r1" and "r2", perform an add operation on the
+    // ranges.
+    static Range Add(Range& r1, Range& r2)
+    {
+        Limit& r1lo = r1.LowerLimit();
+        Limit& r1hi = r1.UpperLimit();
+        Limit& r2lo = r2.LowerLimit();
+        Limit& r2hi = r2.UpperLimit();
+
+        Range result = Limit(Limit::keUnknown);
+
+        // Check lo ranges if they are dependent and not unknown.
+        if ((r1lo.IsDependent() && !r1lo.IsUnknown()) || (r2lo.IsDependent() && !r2lo.IsUnknown()))
+        {
+            result.lLimit = Limit(Limit::keDependent);
+        }
+        // Check hi ranges if they are dependent and not unknown.
+        if ((r1hi.IsDependent() && !r1hi.IsUnknown()) || (r2hi.IsDependent() && !r2hi.IsUnknown()))
+        {
+            result.uLimit = Limit(Limit::keDependent);
+        }
+
+        if (r1lo.IsConstant())
+        {
+            result.lLimit = AddConstantLimit(r1lo, r2lo);
+        }
+        if (r2lo.IsConstant())
+        {
+            result.lLimit = AddConstantLimit(r2lo, r1lo);
+        }
+        if (r1hi.IsConstant())
+        {
+            result.uLimit = AddConstantLimit(r1hi, r2hi);
+        }
+        if (r2hi.IsConstant())
+        {
+            result.uLimit = AddConstantLimit(r2hi, r1hi);
+        }
         return result;
     }
+
 };
 
 class RangeCheck
