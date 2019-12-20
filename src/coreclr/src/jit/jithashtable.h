@@ -228,13 +228,21 @@ public:
         }
     }
 
+#ifdef DEBUG
+    enum class SetKind
+    {
+        None,
+        Overwrite
+    };
+#endif
+
     //------------------------------------------------------------------------
     // Set: Associate the specified value with the specified key.
     //
     // Arguments:
     //    k - the key
     //    v - the value
-    //    kind - Normal, we are not allowed to overwrite
+    //    kind - (debug only) Normal, we are not allowed to overwrite
     //           Overwrite, we are allowed to overwrite
     //           currently only used by CHK/DBG builds in an assert.
     //
@@ -246,13 +254,7 @@ public:
     //    If the key already exists and kind is Normal
     //    this method will assert
     //
-    enum SetKind
-    {
-        None,
-        Overwrite
-    };
-
-    bool Set(Key k, Value v, SetKind kind = None)
+    bool Set(Key k, Value v DEBUGARG(SetKind kind = SetKind::None))
     {
         CheckGrowth();
 
@@ -267,7 +269,7 @@ public:
         }
         if (pN != nullptr)
         {
-            assert(kind == Overwrite);
+            assert(kind == SetKind::Overwrite);
             pN->m_val = v;
             return true;
         }
