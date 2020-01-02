@@ -301,11 +301,26 @@ GenTree* Lowering::LowerNode(GenTree* node)
             // store under a block store if codegen will require it.
             if ((node->TypeGet() == TYP_STRUCT) && (node->gtGetOp1()->OperGet() != GT_PHI))
             {
+                LclVarDsc* varDsc = comp->lvaGetDesc(store);
+                GenTree*   src    = node->gtGetOp1();
 #if FEATURE_MULTIREG_RET
-                GenTree* src = node->gtGetOp1();
                 assert((src->OperGet() == GT_CALL) && src->AsCall()->HasMultiRegRetVal());
 #else  // !FEATURE_MULTIREG_RET
-                assert(!"Unexpected struct local store in Lowering");
+                if (!src->OperIs(GT_LCL_VAR) || varDsc->GetLayout()->GetRegisterType() == TYP_UNDEF)
+                {
+                    GenTreeLclVar* addr =
+                        new (comp, GT_LCL_VAR_ADDR) GenTreeLclVar(GT_LCL_VAR_ADDR, TYP_I_IMPL, store->GetLclNum());
+                    store->ChangeOper(GT_STORE_OBJ);
+                    store->gtFlags                  = GTF_ASG | GTF_IND_NONFAULTING | GTF_IND_TGT_NOT_HEAP;
+                    store->AsObj()->gtBlkOpGcUnsafe = false;
+                    store->AsObj()->gtBlkOpKind     = GenTreeObj::BlkOpKindInvalid;
+                    store->AsObj()->SetLayout(varDsc->GetLayout());
+                    store->AsObj()->SetAddr(addr);
+                    store->AsObj()->SetData(src);
+                    BlockRange().InsertBefore(store, addr);
+                    LowerBlockStore(store->AsObj());
+                    break;
+                }
 #endif // !FEATURE_MULTIREG_RET
             }
             LowerStoreLoc(node->AsLclVarCommon());
