@@ -2464,16 +2464,25 @@ void setTgtPref(Interval* interval, RefPosition* tgtPrefUse)
 RefPosition* LinearScan::BuildDef(GenTree* tree, regMaskTP dstCandidates, int multiRegIdx)
 {
     assert(!tree->isContained());
-    RegisterType type = getDefType(tree);
 
     if (dstCandidates != RBM_NONE)
     {
         assert((tree->GetRegNum() == REG_NA) || (dstCandidates == genRegMask(tree->GetRegByIndex(multiRegIdx))));
     }
 
-    if (tree->IsMultiRegNode())
+    RegisterType type;
+    if (!tree->IsMultiRegNode())
+    {
+        type = getDefType(tree);
+    }
+    else
     {
         type = tree->GetRegTypeByIndex(multiRegIdx);
+    }
+
+    if (varTypeIsFloating(type) || varTypeIsSIMD(type))
+    {
+        compiler->compFloatingPointUsed = true;
     }
 
     Interval* interval = newInterval(type);

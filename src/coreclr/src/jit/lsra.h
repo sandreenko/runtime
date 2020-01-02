@@ -1066,7 +1066,12 @@ private:
     // Get the type that this tree defines.
     var_types getDefType(GenTree* tree)
     {
-        return tree->TypeGet();
+        var_types type = tree->TypeGet();
+        if (type == TYP_STRUCT)
+        {
+            type = compiler->lvaGetDesc(tree->AsLclVar())->GetLayout()->GetRegisterType();
+        }
+        return type;
     }
 
     // Managing internal registers during the BuildNode process.

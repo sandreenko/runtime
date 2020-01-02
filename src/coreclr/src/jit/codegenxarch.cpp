@@ -4588,7 +4588,8 @@ void CodeGen::genCodeForLclVar(GenTreeLclVar* tree)
     // lcl_vars are not defs
     assert((tree->gtFlags & GTF_VAR_DEF) == 0);
 
-    bool isRegCandidate = compiler->lvaTable[tree->GetLclNum()].lvIsRegCandidate();
+    LclVarDsc* varDsc         = compiler->lvaGetDesc(tree);
+    bool       isRegCandidate = varDsc->lvIsRegCandidate();
 
     // If this is a register candidate that has been spilled, genConsumeReg() will
     // reload it at the point of use.  Otherwise, if it's not in a register, we load it here.
@@ -4604,8 +4605,15 @@ void CodeGen::genCodeForLclVar(GenTreeLclVar* tree)
         }
 #endif // defined(FEATURE_SIMD) && defined(_TARGET_X86_)
 
-        GetEmitter()->emitIns_R_S(ins_Load(tree->TypeGet(), compiler->isSIMDTypeLocalAligned(tree->GetLclNum())),
-                                  emitTypeSize(tree), tree->GetRegNum(), tree->GetLclNum(), 0);
+        var_types type = tree->TypeGet();
+
+        if (type == TYP_STRUCT)
+        {
+            type = varDsc->GetLayout()->GetRegisterType();
+        }
+
+        GetEmitter()->emitIns_R_S(ins_Load(type, compiler->isSIMDTypeLocalAligned(tree->GetLclNum())),
+                                  emitTypeSize(type), tree->GetRegNum(), tree->GetLclNum(), 0);
         genProduceReg(tree);
     }
 }
@@ -4665,11 +4673,15 @@ void CodeGen::genCodeForStoreLclVar(GenTreeLclVar* tree)
     }
     else
     {
-        noway_assert(targetType != TYP_STRUCT);
-        assert(!varTypeIsFloating(targetType) || (targetType == op1->TypeGet()));
-
         unsigned   lclNum = tree->GetLclNum();
-        LclVarDsc* varDsc = &(compiler->lvaTable[lclNum]);
+        LclVarDsc* varDsc = compiler->lvaGetDesc(lclNum);
+
+        if (targetType == TYP_STRUCT)
+        {
+            targetType = varDsc->GetLayout()->GetRegisterType();
+        }
+
+        assert(!varTypeIsFloating(targetType) || (targetType == op1->TypeGet()));
 
         // Ensure that lclVar nodes are typed correctly.
         assert(!varDsc->lvNormalizeOnStore() || (targetType == genActualType(varDsc->TypeGet())));
