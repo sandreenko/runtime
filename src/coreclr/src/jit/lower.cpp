@@ -286,8 +286,9 @@ GenTree* Lowering::LowerNode(GenTree* node)
 
         case GT_STORE_LCL_FLD:
         {
-#if defined(_TARGET_AMD64_) && defined(FEATURE_SIMD)
             GenTreeLclVarCommon* const store = node->AsLclVarCommon();
+
+#if defined(_TARGET_AMD64_) && defined(FEATURE_SIMD)
             if ((store->TypeGet() == TYP_SIMD8) != (store->gtOp1->TypeGet() == TYP_SIMD8))
             {
                 GenTreeUnOp* bitcast =
