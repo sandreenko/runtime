@@ -62,8 +62,10 @@ class ClassLayout
     {
     }
 
+public:
     static ClassLayout* Create(Compiler* compiler, CORINFO_CLASS_HANDLE classHandle);
 
+private:
     ClassLayout(CORINFO_CLASS_HANDLE classHandle, bool isValueClass, unsigned size DEBUGARG(const char* className))
         : m_classHandle(classHandle)
         , m_size(size)

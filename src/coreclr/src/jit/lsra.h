@@ -1069,7 +1069,18 @@ private:
         var_types type = tree->TypeGet();
         if (type == TYP_STRUCT)
         {
-            type = compiler->lvaGetDesc(tree->AsLclVar())->GetLayout()->GetRegisterType();
+            // Need to find the register type.
+            if (tree->OperIsLocal())
+            {
+                LclVarDsc* varDsc = compiler->lvaGetDesc(tree->AsLclVar());
+                type              = varDsc->GetLayout()->GetRegisterType();
+            }
+            else
+            {
+                GenTreeCall* call   = tree->AsCall();
+                ClassLayout* layout = ClassLayout::Create(compiler, call->gtRetClsHnd);
+                type                = layout->GetRegisterType();
+            }
         }
         return type;
     }
