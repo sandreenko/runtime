@@ -9622,6 +9622,11 @@ GenTree* Compiler::fgMorphBlockOperand(GenTree* tree, var_types asgType, unsigne
         {
             lclNode = effectiveVal->AsLclVarCommon();
         }
+        else if (effectiveVal->IsCall())
+        {
+            needsIndirection = false;
+        }
+
         if (lclNode != nullptr)
         {
             LclVarDsc* varDsc = &(lvaTable[lclNode->GetLclNum()]);
