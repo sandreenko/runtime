@@ -1204,8 +1204,8 @@ GenTree* Compiler::impAssignStructPtr(GenTree*             destAddr,
 
             var_types returnType = (var_types)src->AsCall()->gtReturnType;
 
-            // We won't use a return buffer, so change the type of src->gtType to 'returnType'
-            src->gtType = genActualType(returnType);
+            //// We won't use a return buffer, so change the type of src->gtType to 'returnType'
+            // src->gtType = genActualType(returnType);
 
             // First we try to change this to "LclVar/LclFld = call"
             //
@@ -1214,7 +1214,8 @@ GenTree* Compiler::impAssignStructPtr(GenTree*             destAddr,
                 // If it is a multi-reg struct return, don't change the oper to GT_LCL_FLD.
                 // That is, the IR will be of the form lclVar = call for multi-reg return
                 //
-                GenTreeLclVar* lcl = destAddr->AsOp()->gtOp1->AsLclVar();
+                GenTreeLclVar* lcl    = destAddr->AsOp()->gtOp1->AsLclVar();
+                LclVarDsc*     varDsc = lvaGetDesc(lcl->GetLclNum());
                 if (src->AsCall()->HasMultiRegRetVal())
                 {
                     // Mark the struct LclVar as used in a MultiReg return context
@@ -1222,9 +1223,11 @@ GenTree* Compiler::impAssignStructPtr(GenTree*             destAddr,
                     // TODO-1stClassStructs: Eliminate this pessimization when we can more generally
                     // handle multireg returns.
                     lcl->gtFlags |= GTF_DONT_CSE;
-                    lvaTable[lcl->AsLclVarCommon()->GetLclNum()].lvIsMultiRegRet = true;
+                    varDsc->lvIsMultiRegRet = true;
                 }
-                else if (lcl->gtType != src->gtType)
+                else if ((lcl->gtType != src->gtType)
+                         // && (info.compCompHnd->getClassSize(src->AsCall()->gtRetClsHnd) != varDsc->lvExactSize)
+                         )
                 {
                     // We change this to a GT_LCL_FLD (from a GT_ADDR of a GT_LCL_VAR)
                     lcl->ChangeOper(GT_LCL_FLD);
