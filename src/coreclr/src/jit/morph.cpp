@@ -7388,6 +7388,12 @@ GenTree* Compiler::fgMorphPotentialTailCall(GenTreeCall* call)
             nodeTy = TYP_DOUBLE;
         }
 #endif
+        if (varTypeIsStruct(nodeTy))
+        {
+            // This is a register-returned struct. Return a 0.
+            // The actual return registers are hacked in lower and the register allocator.
+            nodeTy = TYP_INT;
+        }
         result = gtNewZeroConNode(genActualType(nodeTy));
         result = fgMorphTree(result);
     }
@@ -9597,10 +9603,18 @@ GenTree* Compiler::fgMorphBlockOperand(GenTree* tree, var_types asgType, unsigne
             }
             effectiveVal->gtType = asgType;
         }
-        else if (effectiveVal->TypeGet() != asgType)
+        else
         {
-            GenTree* addr = gtNewOperNode(GT_ADDR, TYP_BYREF, effectiveVal);
-            effectiveVal  = gtNewIndir(asgType, addr);
+
+            // bool simdCall = (effectiveVal->IsCall() &&
+            // (info.compCompHnd->getClassSize(effectiveVal->AsCall()->gtRetClsHnd) == blockWidth));
+            if ((effectiveVal->TypeGet() != asgType)
+                //&& !simdCall
+                )
+            {
+                GenTree* addr = gtNewOperNode(GT_ADDR, TYP_BYREF, effectiveVal);
+                effectiveVal  = gtNewIndir(asgType, addr);
+            }
         }
     }
     else
