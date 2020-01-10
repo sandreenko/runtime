@@ -8896,7 +8896,8 @@ GenTree* Compiler::fgMorphOneAsgBlockOp(GenTree* tree)
 
                 if (dest == destLclVarTree)
                 {
-                    dest = gtNewIndir(asgType, gtNewOperNode(GT_ADDR, TYP_BYREF, dest));
+                    GenTree* addr = gtNewOperNode(GT_ADDR, TYP_BYREF, dest);
+                    dest = gtNewIndir(asgType, addr);
                 }
             }
         }
@@ -9608,7 +9609,8 @@ GenTree* Compiler::fgMorphBlockOperand(GenTree* tree, var_types asgType, unsigne
 
             // bool simdCall = (effectiveVal->IsCall() &&
             // (info.compCompHnd->getClassSize(effectiveVal->AsCall()->gtRetClsHnd) == blockWidth));
-            if ((effectiveVal->TypeGet() != asgType)
+            bool canCreateAddr = !effectiveVal->IsCall() && !effectiveVal->OperIsSIMD();
+            if ((effectiveVal->TypeGet() != asgType && canCreateAddr)
                 //&& !simdCall
                 )
             {

@@ -55,10 +55,6 @@ void Lowering::LowerStoreLoc(GenTreeLclVarCommon* storeLoc)
         unsigned   varNum = storeLoc->GetLclNum();
         LclVarDsc* varDsc = comp->lvaTable + varNum;
 
-        if (varDsc->lvIsSIMDType())
-        {
-            noway_assert(storeLoc->gtType != TYP_STRUCT);
-        }
         unsigned size = genTypeSize(storeLoc);
         // If we are storing a constant into a local variable
         // we extend the size of the store here
@@ -98,6 +94,21 @@ void Lowering::LowerStoreLoc(GenTreeLclVarCommon* storeLoc)
     {
         // We should only encounter this for lclVars that are lvDoNotEnregister.
         verifyLclFldDoNotEnregister(storeLoc->GetLclNum());
+    }
+    if ((storeLoc->gtOper == GT_STORE_LCL_VAR) && (storeLoc->gtOp1))
+    {
+        unsigned   varNum = storeLoc->GetLclNum();
+        LclVarDsc* varDsc = comp->lvaTable + varNum;
+        GenTree* src = storeLoc->gtOp1;
+        if (src->IsCall() && src->TypeGet() == TYP_SIMD8)
+        {
+
+            GenTreeUnOp* bitcast = new (comp, GT_BITCAST) GenTreeOp(GT_BITCAST, TYP_SIMD8, src, nullptr);
+            BlockRange().InsertAfter(src, bitcast);
+            storeLoc->gtOp1 = bitcast;
+            src->gtType = TYP_LONG;
+        }
+
     }
     ContainCheckStoreLoc(storeLoc);
 }

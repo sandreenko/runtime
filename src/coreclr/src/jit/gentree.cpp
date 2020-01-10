@@ -14848,10 +14848,23 @@ GenTree* Compiler::gtNewTempAssign(
         {
             ok = true;
         }
-        else if (genTypeSize(valTyp) == genTypeSize(dstTyp))
+        else
         {
-            ok          = true;
-            needBitCast = true;
+            assert(!varTypeIsStruct(dstTyp));
+            unsigned dstSize = genTypeSize(dstTyp);
+
+            unsigned srcSize = genTypeSize(valTyp);
+            if (srcSize == 0)
+            {
+                assert(val->IsCall());
+                CORINFO_CLASS_HANDLE structHnd = val->AsCall()->gtRetClsHnd;
+                srcSize = info.compCompHnd->getClassSize(structHnd);
+            }
+            if (dstSize == srcSize)
+            {
+                ok = true;
+                needBitCast = true;
+            }
         }
 
         if (!ok)
@@ -14882,7 +14895,7 @@ GenTree* Compiler::gtNewTempAssign(
     // internal trees use SIMD types that are not used by the input IL. In this case, we allow
     // a null type handle and derive the necessary information about the type from its varType.
     CORINFO_CLASS_HANDLE structHnd = gtGetStructHandleIfPresent(val);
-    if (varTypeIsStruct(valTyp) && ((structHnd != NO_CLASS_HANDLE) || (varTypeIsSIMD(valTyp))))
+    if (!needBitCast && varTypeIsStruct(valTyp) && ((structHnd != NO_CLASS_HANDLE) || (varTypeIsSIMD(valTyp))))
     {
         assert(!needBitCast);
         // The struct value may be be a child of a GT_COMMA.

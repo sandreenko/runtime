@@ -5154,14 +5154,14 @@ void CodeGen::genCodeForStoreInd(GenTreeStoreInd* tree)
         else
         {
             emitAttr typeSize;
-            // if (varTypeIsStruct(tree->TypeGet()))
-            //{
-            //    assert(data->IsCall());
-            //    GenTreeCall* call = data->AsCall();
-            //    CORINFO_CLASS_HANDLE structHnd = call->gtRetClsHnd;
-            //    typeSize = (emitAttr)compiler->info.compCompHnd->getClassSize(structHnd);
-            //}
-            // else
+             if (tree->TypeGet() == TYP_STRUCT)
+            {
+                assert(data->IsCall());
+                GenTreeCall* call = data->AsCall();
+                CORINFO_CLASS_HANDLE structHnd = call->gtRetClsHnd;
+                typeSize = (emitAttr)compiler->info.compCompHnd->getClassSize(structHnd);
+            }
+             else
             {
                 typeSize = emitTypeSize(tree);
             }

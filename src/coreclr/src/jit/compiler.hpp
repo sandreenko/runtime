@@ -952,6 +952,7 @@ inline Statement* Compiler::gtNewStmt(GenTree* expr, IL_OFFSETX offset)
 
 inline GenTree* Compiler::gtNewOperNode(genTreeOps oper, var_types type, GenTree* op1, bool doSimplifications)
 {
+    assert(oper != GT_ADDR || !(op1->IsCall() || op1->OperIsSIMD()));
     assert((GenTree::OperKind(oper) & (GTK_UNOP | GTK_BINOP)) != 0);
     assert((GenTree::OperKind(oper) & GTK_EXOP) ==
            0); // Can't use this to construct any types that extend unary/binary operator.

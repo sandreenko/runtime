@@ -1281,6 +1281,20 @@ void Lowering::LowerArg(GenTreeCall* call, GenTree** ppArg)
         assert((arg->OperIsStore() && !arg->IsValue()) || arg->IsArgPlaceHolderNode() || arg->IsNothingNode() ||
                arg->OperIsCopyBlkOp());
         return;
+        //if (!varTypeIsSIMD(arg))
+        //{
+        //    return;
+        //}
+        //else
+        //{
+        //    assert(arg->TypeGet() == TYP_SIMD8);
+        //    GenTree* actualArg = arg->gtGetOp1();
+        //    GenTreeUnOp* bitcast = new (comp, GT_BITCAST) GenTreeOp(GT_BITCAST, TYP_LONG, actualArg, nullptr);
+        //    BlockRange().InsertAfter(actualArg, bitcast);
+        //    arg->AsUnOp()->gtOp1 = bitcast;
+        //    arg->gtType = TYP_LONG;
+        //    return;
+        //}
     }
 
     fgArgTabEntry* info = comp->gtArgEntryByNode(call, arg);
@@ -1664,6 +1678,7 @@ void Lowering::LowerCall(GenTree* node)
     }
 
     ContainCheckCallOperands(call);
+
     JITDUMP("lowering call (after):\n");
     DISPTREERANGE(BlockRange(), call);
     JITDUMP("\n");
@@ -3102,16 +3117,34 @@ void Lowering::LowerRet(GenTree* ret)
     JITDUMP("lowering GT_RETURN\n");
     DISPNODE(ret);
     JITDUMP("============");
+    GenTreeUnOp* unOp = ret->AsUnOp();
 
 #if defined(_TARGET_AMD64_) && defined(FEATURE_SIMD)
-    GenTreeUnOp* const unOp = ret->AsUnOp();
-    if ((unOp->TypeGet() == TYP_LONG) && (unOp->gtOp1->TypeGet() == TYP_SIMD8))
+    if (unOp->TypeGet() == TYP_LONG)
     {
-        GenTreeUnOp* bitcast = new (comp, GT_BITCAST) GenTreeOp(GT_BITCAST, TYP_LONG, unOp->gtOp1, nullptr);
-        unOp->gtOp1          = bitcast;
-        BlockRange().InsertBefore(unOp, bitcast);
+        GenTree* retVal = unOp->gtOp1;
+        if (retVal->TypeGet() == TYP_SIMD8)
+        {
+            if (retVal->IsCall())
+            {
+                retVal->gtType = TYP_LONG;
+            }
+            GenTreeUnOp* bitcast = new (comp, GT_BITCAST) GenTreeOp(GT_BITCAST, TYP_LONG, retVal, nullptr);
+            unOp->gtOp1 = bitcast;
+            BlockRange().InsertBefore(unOp, bitcast);
+        }
+
+
     }
 #endif // _TARGET_AMD64_
+
+    if (unOp->gtType != TYP_VOID && unOp->gtOp1->IsCall() && unOp->gtOp1->TypeGet() == TYP_SIMD8)
+    {
+        GenTreeUnOp* bitcast = new (comp, GT_BITCAST) GenTreeOp(GT_BITCAST, TYP_SIMD8, unOp->gtOp1, nullptr);
+        BlockRange().InsertAfter(unOp->gtOp1, bitcast);
+        unOp->gtOp1->gtType = TYP_LONG;
+        unOp->gtOp1 = bitcast;
+    }
 
     // Method doing PInvokes has exactly one return block unless it has tail calls.
     if (comp->compMethodRequiresPInvokeFrame() && (comp->compCurBB == comp->genReturnBB))
