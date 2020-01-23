@@ -4050,7 +4050,9 @@ private:
 #endif // FEATURE_VARARG
 
 #if defined(DEBUG)
+public:
     static unsigned jitTotalMethodCompiled;
+private:
 #endif
 
 #ifdef DEBUG

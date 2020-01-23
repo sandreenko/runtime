@@ -956,7 +956,7 @@ inline GenTree* Compiler::gtNewOperNode(genTreeOps oper, var_types type, GenTree
     assert((GenTree::OperKind(oper) & GTK_EXOP) ==
            0); // Can't use this to construct any types that extend unary/binary operator.
     assert(op1 != nullptr || oper == GT_RETFILT || oper == GT_NOP || (oper == GT_RETURN && type == TYP_VOID));
-    assert(oper != GT_ADDR || !(op1->IsCall() || op1->OperIsSIMD())); // Can't get address of some nodes.
+    //assert(oper != GT_ADDR || !(op1->IsCall() || op1->OperIsSIMD())); // Can't get address of some nodes.
 
     if (doSimplifications)
     {
@@ -1760,7 +1760,19 @@ inline void LclVarDsc::incRefCnts(BasicBlock::weight_t weight, Compiler* comp, R
     //
     // Increment counts on the local itself.
     //
-    if (lvType != TYP_STRUCT || promotionType != Compiler::PROMOTION_TYPE_INDEPENDENT)
+    bool incrementOnItself = false;
+    if (lvType != TYP_STRUCT)
+    {
+        // That was already retyped as its only field.
+        incrementOnItself = true;
+    }
+    else if (promotionType != Compiler::PROMOTION_TYPE_INDEPENDENT)
+    {
+        // That needs a stack location.
+        incrementOnItself = true;
+    }
+
+    if (incrementOnItself)
     {
         //
         // Increment lvRefCnt

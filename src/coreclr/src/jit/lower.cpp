@@ -325,7 +325,7 @@ GenTree* Lowering::LowerNode(GenTree* node)
                 if (!src->OperIs(GT_LCL_VAR) || varDsc->GetLayout()->GetRegisterType() == TYP_UNDEF)
                 {
                     GenTreeLclVar* addr =
-                        new (comp, GT_LCL_VAR_ADDR) GenTreeLclVar(GT_LCL_VAR_ADDR, TYP_I_IMPL, store->GetLclNum());
+                        new (comp, GT_LCL_VAR_ADDR) GenTreeLclVar(GT_LCL_VAR_ADDR, TYP_BYREF, store->GetLclNum());
                     store->ChangeOper(GT_STORE_OBJ);
                     store->gtFlags                  = GTF_ASG | GTF_IND_NONFAULTING | GTF_IND_TGT_NOT_HEAP;
                     store->AsObj()->gtBlkOpGcUnsafe = false;
@@ -3136,15 +3136,19 @@ void Lowering::LowerRet(GenTree* ret)
 #if defined(_TARGET_AMD64_) && defined(FEATURE_SIMD)
     if (unOp->TypeGet() == TYP_SIMD8)
     {
-        GenTree* retVal = unOp->gtOp1;
-        assert(retVal->TypeGet() == TYP_SIMD8);
-        GenTreeUnOp* bitcast = new (comp, GT_BITCAST) GenTreeOp(GT_BITCAST, TYP_LONG, retVal, nullptr);
-        BlockRange().InsertBefore(unOp, bitcast);
-        retVal->gtType = TYP_LONG;
+        //GenTree* retVal = unOp->gtOp1;
+        //assert(retVal->TypeGet() == TYP_SIMD8);
+        //GenTreeUnOp* bitcast = new (comp, GT_BITCAST) GenTreeOp(GT_BITCAST, TYP_LONG, retVal, nullptr);
+        //BlockRange().InsertBefore(unOp, bitcast);
+        //retVal->gtType = TYP_LONG;
+        //unOp->gtOp1 = bitcast;
     }
 #endif // _TARGET_AMD64_ && FEATURE_SIMD
 
-    assert(!varTypeIsStruct(unOp));
+    if (varTypeIsStruct(unOp))
+    {
+        unOp->gtType = genActualType(comp->info.compRetNativeType);
+    }
     if (unOp->gtType != TYP_VOID)
     {
         GenTree* retVal = unOp->gtOp1;
@@ -3163,12 +3167,29 @@ void Lowering::LowerRet(GenTree* ret)
             // N005(9, 7)[000003] -- - XG------ - *RETURN    long
             // We can't catch it when lowering IND, because
             // we will mess with STORE_BLK(IND) case.
-            assert(retVal->OperIs(GT_IND, GT_OBJ, GT_LCL_VAR));
+            assert(retVal->OperIs(GT_IND, GT_OBJ, GT_LCL_VAR, GT_LCL_FLD, GT_BITCAST, GT_CNS_INT, GT_SIMD));
             retVal->gtType = ret->gtType;
             if (retVal->OperIs(GT_OBJ))
             {
                 retVal->ChangeOper(GT_IND);
             }
+
+            else if (retVal->OperIs(GT_LCL_VAR))
+            {
+                GenTreeLclVar* lclVar = retVal->AsLclVar();
+                unsigned lclNum = lclVar->GetLclNum();
+                LclVarDsc* varDsc = comp->lvaGetDesc(lclNum);
+                if (varDsc->lvPromoted && comp->lvaGetPromotionType(lclNum) == Compiler::lvaPromotionType::PROMOTION_TYPE_INDEPENDENT)
+                {
+                    // We have to replace it with its field.
+                    assert(varDsc->lvFieldCnt == 1);
+                    assert(varDsc->lvRefCnt() == 0);
+                    unsigned fieldLclNum = varDsc->lvFieldLclStart;
+                    lclVar->SetLclNum(fieldLclNum);
+                    JITDUMP("Replacing independently promoted parent local var with its only field for the return %u, %u\n", lclNum, fieldLclNum);
+                }
+            }
+
             // TODO check that unOp has struct handle.
         }
     }

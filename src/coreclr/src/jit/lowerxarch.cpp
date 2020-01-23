@@ -345,9 +345,13 @@ void Lowering::LowerBlockStore(GenTreeBlk* blkNode)
         {
             assert(src->OperIs(GT_BITCAST));
             assert(varTypeIsStruct(src));
-            if (!blkNode->AsObj()->GetLayout()->HasGCPtr())
+            if (blkNode->OperIs(GT_STORE_OBJ) && !blkNode->AsObj()->GetLayout()->HasGCPtr())
             {
                 blkNode->SetOper(GT_STORE_BLK);
+
+            }
+            if (blkNode->OperIs(GT_STORE_BLK))
+            {
                 blkNode->gtBlkOpKind = GenTreeBlk::BlkOpKindUnroll;
             }
         }
