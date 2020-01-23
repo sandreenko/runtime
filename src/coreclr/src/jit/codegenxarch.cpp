@@ -3726,9 +3726,29 @@ void CodeGen::genCodeForCpObj(GenTreeObj* cpObjNode)
             instruction ins      = ins_Store(cpObjNode->TypeGet());
             emitAttr    sizeAttr = EA_ATTR(size);
             regNumber   srcReg   = source->GetRegNum();
-            dstLclVarNum         = actualDstAddr->AsLclVarCommon()->GetLclNum();
+            int offset = 0;
+            if (actualDstAddr->IsLocal())
+            {
+                dstLclVarNum = actualDstAddr->AsLclVarCommon()->GetLclNum();
+            }
+            else if (actualDstAddr->OperIs(GT_ADD))
+            {
+                GenTreeOp* add = actualDstAddr->AsOp();
+                dstLclVarNum = add->gtOp1->AsLclVar()->GetLclNum();
+                offset = static_cast<int>(add->gtOp2->AsIntCon()->IconValue());
+            }
+            else
+            {
+                assert(actualDstAddr->IsLocalAddrExpr());
+                dstLclVarNum = actualDstAddr->AsLclVarCommon()->GetLclNum();
+            }
             assert(dstLclVarNum != BAD_VAR_NUM);
-            GetEmitter()->emitIns_S_R(ins, sizeAttr, srcReg, dstLclVarNum, 0);
+
+            GetEmitter()->emitIns_S_R(ins, sizeAttr, srcReg, dstLclVarNum, offset);
+            if (actualDstAddr->IsLocalAddrExpr())
+            {
+                gcInfo.gcMarkRegSetNpt(genRegMask(dstAddr->GetReg()));
+            }
             return;
         }
     }
