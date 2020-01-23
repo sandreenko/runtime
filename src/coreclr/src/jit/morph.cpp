@@ -12833,7 +12833,21 @@ DONE_MORPHING_CHILDREN:
             // is a local or clsVar, even if it has been address-exposed.
             if (op1->OperGet() == GT_ADDR)
             {
-                tree->gtFlags |= (op1->gtGetOp1()->gtFlags & GTF_GLOB_REF);
+                GenTreeUnOp* addr = op1->AsUnOp();
+                GenTree* addrOp = addr->gtGetOp1();
+                tree->gtFlags |= (addrOp->gtFlags & GTF_GLOB_REF);
+                if (addrOp->OperIs(GT_LCL_VAR))
+                {
+                    unsigned lclNum = addrOp->AsLclVar()->GetLclNum();
+                    // That is for
+                    // [000005] --CXG------ - *RETURN    struct
+                    // [000004] --CXG------ - \-- * OBJ       struct < System.Runtime.Intrinsics.Vector64`1[Double], 8 >
+                    // [000006] ------------                 \--* ADDR      byref
+                    // [000007] ------------                    \--* LCL_VAR   double V00 arg0
+                    // probably the correct fix is to fold OBJ struct(ADDR) as bitcast in lower.
+                    lvaSetVarDoNotEnregister(lclNum DEBUGARG(DNER_LocalField));
+                }
+                
             }
             break;
 
