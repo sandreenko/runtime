@@ -1763,7 +1763,17 @@ void CodeGen::genCodeForTreeNode(GenTree* treeNode)
             }
             else if (treeNode->GetRegNum() != op1->GetRegNum())
             {
-                inst_RV_RV(ins_Copy(treeNode->TypeGet()), treeNode->GetRegNum(), op1->GetRegNum(), treeNode->TypeGet());
+                // That is the case where bitcast actually moves value from one register to another,
+                // it works well with types that have size, but not with structs.
+                if (treeNode->TypeGet() != TYP_STRUCT)
+                {
+                    inst_RV_RV(ins_Copy(treeNode->TypeGet()), treeNode->GetRegNum(), op1->GetRegNum(), treeNode->TypeGet());
+                }
+                else
+                {
+                    // Add an assert that the struct size matches?
+                    inst_RV_RV(ins_Copy(op1->TypeGet()), treeNode->GetRegNum(), op1->GetRegNum(), op1->TypeGet());
+                }
             }
 
             genProduceReg(treeNode);
@@ -3744,8 +3754,16 @@ void CodeGen::genCodeForCpObj(GenTreeObj* cpObjNode)
             }
             assert(dstLclVarNum != BAD_VAR_NUM);
 
-            GetEmitter()->emitIns_S_R(ins, sizeAttr, srcReg, dstLclVarNum, offset);
-            if (actualDstAddr->IsLocalAddrExpr())
+            if (actualDstAddr->GetReg() == REG_NA)
+            {
+                GetEmitter()->emitIns_S_R(ins, sizeAttr, srcReg, dstLclVarNum, offset);
+            }
+            else
+            {
+                assert(offset == 0 || actualDstAddr->OperIs(GT_ADD));
+                GetEmitter()->emitIns_R_R(ins, sizeAttr, srcReg, actualDstAddr->GetReg());
+            }
+            if (actualDstAddr->IsLocalAddrExpr() || actualDstAddr->OperIs(GT_ADD))
             {
                 gcInfo.gcMarkRegSetNpt(genRegMask(dstAddr->GetReg()));
             }

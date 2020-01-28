@@ -1858,6 +1858,7 @@ def setup_args(args):
                         "mode", # "mode" is from the `parser.add_subparsers(dest='mode')` call
                         lambda unused: True,
                         "Unable to set mode")
+    assert coreclr_args.mode is not None
 
     def setup_mch_arg(mch_file):
         if mch_file is not None:

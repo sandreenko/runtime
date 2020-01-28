@@ -69,6 +69,8 @@ const char* Compiler::eeGetMethodFullName(CORINFO_METHOD_HANDLE hnd)
         return methodName;
     }
 
+    return "hack";
+
     FilterSuperPMIExceptionsParam_eeinterface param;
     param.returnType = nullptr;
     param.pThis      = this;

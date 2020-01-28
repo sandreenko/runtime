@@ -15093,10 +15093,14 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                     op1 = gtNewHelperCallNode(CORINFO_HELP_TYPEHANDLE_TO_RUNTIMETYPEHANDLE_MAYBENULL, TYP_STRUCT,
                                               helperArgs);
 
+                    CORINFO_CLASS_HANDLE classHandle = impGetTypeHandleClass();
+
                     // The handle struct is returned in register
                     op1->AsCall()->gtReturnType = GetRuntimeHandleUnderlyingType();
+                    op1->AsCall()->gtRetClsHnd = classHandle;
 
-                    tiRetVal = typeInfo(TI_STRUCT, impGetTypeHandleClass());
+
+                    tiRetVal = typeInfo(TI_STRUCT, classHandle);
                 }
 
                 impPushOnStack(op1, tiRetVal);
@@ -15135,6 +15139,7 @@ void Compiler::impImportBlockCode(BasicBlock* block)
 
                 // The handle struct is returned in register
                 op1->AsCall()->gtReturnType = GetRuntimeHandleUnderlyingType();
+                op1->AsCall()->gtRetClsHnd = tokenType;
 
                 tiRetVal = verMakeTypeInfo(tokenType);
                 impPushOnStack(op1, tiRetVal);
@@ -16502,23 +16507,23 @@ bool Compiler::impReturnInstruction(int prefixFlags, OPCODE& opcode)
                     // assignment to the return temp, using the correct type, and then restore the GT_CALL
                     // node type. During morphing, the GT_CALL will get the correct, final, native return type.
 
-                    bool restoreType = false;
-                    if ((op2->OperGet() == GT_CALL) && (info.compRetType == TYP_STRUCT))
-                    {
-                        noway_assert(op2->TypeGet() == TYP_STRUCT);
-                        op2->gtType = info.compRetNativeType;
-                        restoreType = true;
-                    }
+                    //bool restoreType = false;
+                    //if ((op2->OperGet() == GT_CALL) && (info.compRetType == TYP_STRUCT))
+                    //{
+                    //    noway_assert(op2->TypeGet() == TYP_STRUCT);
+                    //    op2->gtType = info.compRetNativeType;
+                    //    restoreType = true;
+                    //}
 
                     impAssignTempGen(lvaInlineeReturnSpillTemp, op2, se.seTypeInfo.GetClassHandle(),
                                      (unsigned)CHECK_SPILL_ALL);
 
                     GenTree* tmpOp2 = gtNewLclvNode(lvaInlineeReturnSpillTemp, op2->TypeGet());
 
-                    if (restoreType)
-                    {
-                        op2->gtType = TYP_STRUCT; // restore it to what it was
-                    }
+                    //if (restoreType)
+                    //{
+                    //    op2->gtType = TYP_STRUCT; // restore it to what it was
+                    //}
 
                     op2 = tmpOp2;
 #ifdef DEBUG
