@@ -10458,6 +10458,11 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
                     }
                     if (!done)
                     {
+                        // Sometimes src should have TYP_STRUCT type, you can check it by doing:
+                        // indir = gtNewIndir(TYP_STRUCT, src);
+                        // structHndl = gtGetStructHandleIfPresent(indir);
+                        // if (structHndl != NO_CLASS_HANDLE) then it has to be struct,
+                        // but sometimes src destType thinks differently.
                         src = gtNewIndir(destType, src);
                     }
                 }

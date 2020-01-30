@@ -15318,6 +15318,15 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                     op1 = gtNewHelperCallNode(helper,
                                               (var_types)((helper == CORINFO_HELP_UNBOX) ? TYP_BYREF : TYP_STRUCT),
                                               gtNewCallArgs(op2, op1));
+                    if (op1->gtType == TYP_STRUCT)
+                    {
+                        op1->AsCall()->gtRetClsHnd = resolvedToken.hClass;
+                    }
+                    else
+                    {
+                        // Do we have resolvedToken.hClass in that case? Is that dangerous to set it?
+                        // Will anybody read that?
+                    }
                 }
 
                 assert(helper == CORINFO_HELP_UNBOX && op1->gtType == TYP_BYREF || // Unbox helper returns a byref.

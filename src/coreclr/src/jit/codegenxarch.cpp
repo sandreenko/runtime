@@ -3744,18 +3744,27 @@ void CodeGen::genCodeForCpObj(GenTreeObj* cpObjNode)
             else if (actualDstAddr->OperIs(GT_ADD))
             {
                 GenTreeOp* add = actualDstAddr->AsOp();
-                dstLclVarNum = add->gtOp1->AsLclVar()->GetLclNum();
                 offset = static_cast<int>(add->gtOp2->AsIntCon()->IconValue());
+                GenTree* addOp1 = add->gtOp1;
+                if (addOp1->OperIs(GT_LCL_VAR))
+                {
+                    dstLclVarNum = add->gtOp1->AsLclVar()->GetLclNum();
+                }
+                else
+                {
+                    // That could happen for a field that was optimized as IND(CNST);
+                    assert(actualDstAddr->GetReg() != REG_NA);
+                }
             }
             else
             {
                 assert(actualDstAddr->IsLocalAddrExpr());
                 dstLclVarNum = actualDstAddr->AsLclVarCommon()->GetLclNum();
             }
-            assert(dstLclVarNum != BAD_VAR_NUM);
 
             if (actualDstAddr->GetReg() == REG_NA)
             {
+                assert(dstLclVarNum != BAD_VAR_NUM);
                 GetEmitter()->emitIns_S_R(ins, sizeAttr, srcReg, dstLclVarNum, offset);
             }
             else
@@ -3763,8 +3772,11 @@ void CodeGen::genCodeForCpObj(GenTreeObj* cpObjNode)
                 assert(offset == 0 || actualDstAddr->OperIs(GT_ADD));
                 GetEmitter()->emitIns_R_R(ins, sizeAttr, srcReg, actualDstAddr->GetReg());
             }
-            if (actualDstAddr->IsLocalAddrExpr() || actualDstAddr->OperIs(GT_ADD))
+            //if (actualDstAddr->IsLocalAddrExpr() || actualDstAddr->OperIs(GT_ADD))
             {
+                genConsumeOperands(cpObjNode);
+                //genConsumeOperands(dstAddr);
+                gcInfo.gcMarkRegSetNpt(genRegMask(source->GetReg()));
                 gcInfo.gcMarkRegSetNpt(genRegMask(dstAddr->GetReg()));
             }
             return;
