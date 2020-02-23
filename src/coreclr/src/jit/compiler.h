@@ -884,7 +884,7 @@ public:
                (lvIsParam || lvAddrExposed || lvIsStructField);
     }
 
-    bool lvNormalizeOnStore()
+    bool lvNormalizeOnStore() const
     {
         return varTypeIsSmall(TypeGet()) &&
                // lvIsStructField is treated the same as the aliased local, see fgDoNormalizeOnStore.
@@ -926,7 +926,7 @@ public:
     }
 
     // Returns the layout of a struct variable.
-    ClassLayout* GetLayout()
+    ClassLayout* GetLayout() const
     {
         assert(varTypeIsStruct(lvType));
         return m_layout;
@@ -947,6 +947,31 @@ public:
     LclSsaVarDsc* GetPerSsaData(unsigned ssaNum)
     {
         return lvPerSsaData.GetSsaDef(ssaNum);
+    }
+
+    var_types GetRegisterType(const GenTreeLclVarCommon* tree) const
+    {
+        var_types targetType = tree->gtType;
+
+#ifdef DEBUG
+        // Ensure that lclVar nodes are typed correctly.
+        if (tree->OperIs(GT_STORE_LCL_VAR) && lvNormalizeOnStore())
+        {
+            // I am not sure about this check in struct case, targetType would be native, but varDsc->TypeGet() will be
+            // struct.
+            // assert(targetType == genActualType(TypeGet()));
+        }
+        else
+        {
+            // that should be something that we can check here.
+        }
+#endif
+
+        if (targetType != TYP_STRUCT)
+        {
+            return targetType;
+        }
+        return GetLayout()->GetRegisterType();
     }
 
 #ifdef DEBUG

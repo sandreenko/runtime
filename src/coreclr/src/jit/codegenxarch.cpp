@@ -4574,8 +4574,9 @@ void CodeGen::genCodeForLclVar(GenTreeLclVar* tree)
         }
 #endif // defined(FEATURE_SIMD) && defined(TARGET_X86)
 
-        GetEmitter()->emitIns_R_S(ins_Load(tree->TypeGet(), compiler->isSIMDTypeLocalAligned(tree->GetLclNum())),
-                                  emitTypeSize(tree), tree->GetRegNum(), tree->GetLclNum(), 0);
+        var_types type = varDsc->GetRegisterType(tree);
+        GetEmitter()->emitIns_R_S(ins_Load(type, compiler->isSIMDTypeLocalAligned(tree->GetLclNum())),
+                                  emitTypeSize(type), tree->GetRegNum(), tree->GetLclNum(), 0);
         genProduceReg(tree);
     }
 }
@@ -4624,9 +4625,8 @@ void CodeGen::genCodeForStoreLclVar(GenTreeLclVar* tree)
 {
     assert(tree->OperIs(GT_STORE_LCL_VAR));
 
-    var_types targetType = tree->TypeGet();
-    regNumber targetReg  = tree->GetRegNum();
-    emitter*  emit       = GetEmitter();
+    regNumber targetReg = tree->GetRegNum();
+    emitter*  emit      = GetEmitter();
 
     GenTree* op1 = tree->gtGetOp1();
 
@@ -4638,14 +4638,12 @@ void CodeGen::genCodeForStoreLclVar(GenTreeLclVar* tree)
     }
     else
     {
-        noway_assert(targetType != TYP_STRUCT);
-        assert(!varTypeIsFloating(targetType) || (targetType == op1->TypeGet()));
-
         unsigned   lclNum = tree->GetLclNum();
-        LclVarDsc* varDsc = &(compiler->lvaTable[lclNum]);
+        LclVarDsc* varDsc = compiler->lvaGetDesc(lclNum);
 
-        // Ensure that lclVar nodes are typed correctly.
-        assert(!varDsc->lvNormalizeOnStore() || (targetType == genActualType(varDsc->TypeGet())));
+        var_types targetType = varDsc->GetRegisterType(tree);
+
+        assert(!varTypeIsFloating(targetType) || (targetType == op1->TypeGet()));
 
 #if !defined(TARGET_64BIT)
         if (targetType == TYP_LONG)
