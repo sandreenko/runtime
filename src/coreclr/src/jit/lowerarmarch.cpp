@@ -303,8 +303,12 @@ void Lowering::LowerBlockStore(GenTreeBlk* blkNode)
 
         if (blkNode->OperIs(GT_STORE_OBJ))
         {
-            if (!blkNode->AsObj()->GetLayout()->HasGCPtr())
+            const ClassLayout* layout = blkNode->AsObj()->GetLayout();
+            if (!layout->HasGCPtr() || layout->GetSlotCount() == 1)
             {
+                // It is safe to use STORE_BLK instead of STORE_OBJ for
+                // a struct with 1 field. In the past that would be done by
+                // `fgMorphOneAsgBlockOp`.
                 blkNode->SetOper(GT_STORE_BLK);
             }
             else if (dstAddr->OperIsLocalAddr() && (size <= CPBLK_UNROLL_LIMIT))
