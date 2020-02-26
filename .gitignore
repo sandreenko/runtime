@@ -351,3 +351,6 @@ linker
 # ln -s $(pwd)/src/libraries/Common/src src/coreclr/src/System.Private.CoreLib/common
 src/coreclr/src/System.Private.CoreLib/shared
 src/coreclr/src/System.Private.CoreLib/common
+src/coreclr/CMakeSettings.json
+src/coreclr/out/build/x64-Debug/.cmake/api/v1/query/client-MicrosoftVS/query.json
+src/coreclr/out/build/x64-Debug/VSInheritEnvironments.txt
