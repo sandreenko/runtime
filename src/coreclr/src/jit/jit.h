@@ -707,7 +707,9 @@ private:
 #include "target.h"
 
 #if FEATURE_TAILCALL_OPT
-// Enable tail call opt for the following IL pattern
+
+#ifdef FEATURE_CORECLR
+// CoreCLR - enable tail call opt for the following IL pattern
 //
 //     call someFunc
 //     jmp/jcc RetBlock
@@ -715,6 +717,14 @@ private:
 //  RetBlock:
 //     ret
 #define FEATURE_TAILCALL_OPT_SHARED_RETURN 1
+#else
+// Desktop: Keep this to zero as one of app-compat apps that is using GetCallingAssembly()
+// has an issue turning this ON.
+//
+// Refer to TF: Bug: 824625 and its associated regression TF Bug: 1113265
+#define FEATURE_TAILCALL_OPT_SHARED_RETURN 0
+#endif // FEATURE_CORECLR
+
 #else // !FEATURE_TAILCALL_OPT
 #define FEATURE_TAILCALL_OPT_SHARED_RETURN 0
 #endif // !FEATURE_TAILCALL_OPT

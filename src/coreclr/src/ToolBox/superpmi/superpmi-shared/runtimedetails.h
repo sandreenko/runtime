@@ -35,5 +35,6 @@
 // Jit Exports
 typedef ICorJitCompiler*(__stdcall* PgetJit)();
 typedef void(__stdcall* PjitStartup)(ICorJitHost* host);
+typedef void(__stdcall* PsxsJitStartup)(CoreClrCallbacks const& cccallbacks);
 
 #endif

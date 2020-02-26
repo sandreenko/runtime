@@ -7,6 +7,7 @@
 #define _ICorJitInfo
 
 #include "runtimedetails.h"
+#include "ieememorymanager.h"
 
 class interceptor_ICJI : public ICorJitInfo
 {

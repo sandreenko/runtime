@@ -6,11 +6,11 @@
 #ifndef TARGET_H_
 #define TARGET_H_
 
-#if defined(TARGET_UNIX)
+#if defined(FEATURE_CORECLR) && defined(TARGET_UNIX)
 #define FEATURE_VARARG 0
-#else
+#else // !(defined(FEATURE_CORECLR) && defined(TARGET_UNIX))
 #define FEATURE_VARARG 1
-#endif
+#endif // !(defined(FEATURE_CORECLR) && defined(TARGET_UNIX))
 
 /*****************************************************************************/
 // The following are human readable names for the target architectures
@@ -196,8 +196,10 @@ typedef unsigned char   regNumberSmall;
 
 /*****************************************************************************/
 
-// The pseudorandom nop insertion is not necessary for current scenarios
+// The pseudorandom nop insertion is not necessary for current CoreCLR scenarios
+// #if defined(FEATURE_CORECLR) && !defined(TARGET_ARM)
 // #define PSEUDORANDOM_NOP_INSERTION
+// #endif
 
 /*****************************************************************************/
 

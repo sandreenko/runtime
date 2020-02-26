@@ -14,6 +14,15 @@ static void NotImplemented()
     abort();
 }
 
+enum CORINFO_RUNTIME_LOOKUP_KIND { };
+struct CORINFO_LOOKUP_KIND
+{
+    bool                        needsRuntimeLookup;
+    CORINFO_RUNTIME_LOOKUP_KIND runtimeLookupKind;
+    unsigned short              runtimeLookupFlags;
+    void*                       runtimeLookupArgs;
+};
+
 int JitInterfaceWrapper::FilterException(void* pExceptionPointers)
 {
     NotImplemented();
@@ -37,4 +46,22 @@ bool JitInterfaceWrapper::runWithErrorTrap(void* function, void* parameter)
         return false;
     }
     return true;
+}
+
+CORINFO_LOOKUP_KIND JitInterfaceWrapper::getLocationOfThisType(void* context)
+{
+    CorInfoException* pException = nullptr;
+    CORINFO_LOOKUP_KIND _ret;
+    _callbacks->getLocationOfThisType(_thisHandle, &pException, &_ret, context);
+    if (pException != nullptr)
+    {
+        throw pException;
+    }
+    return _ret;
+}
+
+void* JitInterfaceWrapper::getMemoryManager()
+{
+    NotImplemented();
+    return nullptr;
 }

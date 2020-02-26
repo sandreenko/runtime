@@ -698,6 +698,8 @@ namespace Internal.JitInterface
                 }
             }
 
+            result |= CorInfoFlag.CORINFO_FLG_NOSECURITYWRAP;
+
             return (uint)result;
         }
 
@@ -882,6 +884,15 @@ namespace Internal.JitInterface
         { throw new NotImplementedException("satisfiesMethodConstraints"); }
         private bool isCompatibleDelegate(CORINFO_CLASS_STRUCT_* objCls, CORINFO_CLASS_STRUCT_* methodParentCls, CORINFO_METHOD_STRUCT_* method, CORINFO_CLASS_STRUCT_* delegateCls, ref bool pfIsOpenDelegate)
         { throw new NotImplementedException("isCompatibleDelegate"); }
+        private CorInfoInstantiationVerification isInstantiationOfVerifiedGeneric(CORINFO_METHOD_STRUCT_* method)
+        { throw new NotImplementedException("isInstantiationOfVerifiedGeneric"); }
+        private void initConstraintsForVerification(CORINFO_METHOD_STRUCT_* method, ref bool pfHasCircularClassConstraints, ref bool pfHasCircularMethodConstraint)
+        { throw new NotImplementedException("isInstantiationOfVerifiedGeneric"); }
+
+        private CorInfoCanSkipVerificationResult canSkipMethodVerification(CORINFO_METHOD_STRUCT_* ftnHandle)
+        {
+            return CorInfoCanSkipVerificationResult.CORINFO_VERIFICATION_CAN_SKIP;
+        }
 
         private void methodMustBeLoadedBeforeCodeIsRun(CORINFO_METHOD_STRUCT_* method)
         {
@@ -1139,6 +1150,8 @@ namespace Internal.JitInterface
         { throw new NotImplementedException("isValidToken"); }
         private bool isValidStringRef(CORINFO_MODULE_STRUCT_* module, uint metaTOK)
         { throw new NotImplementedException("isValidStringRef"); }
+        private bool shouldEnforceCallvirtRestriction(CORINFO_MODULE_STRUCT_* scope)
+        { throw new NotImplementedException("shouldEnforceCallvirtRestriction"); }
 
         private char* getStringLiteral(CORINFO_MODULE_STRUCT_* module, uint metaTOK, ref int length)
         {
@@ -1221,6 +1234,8 @@ namespace Internal.JitInterface
             // NOTE: cls can be null
             return CorInfoInlineTypeCheck.CORINFO_INLINE_TYPECHECK_PASS;
         }
+
+        private bool canInlineTypeCheckWithObjectVTable(CORINFO_CLASS_STRUCT_* cls) { throw new NotImplementedException(); }
 
         private uint getClassAttribs(CORINFO_CLASS_STRUCT_* cls)
         {
@@ -1504,6 +1519,8 @@ namespace Internal.JitInterface
 
         private CorInfoHelpFunc getSharedCCtorHelper(CORINFO_CLASS_STRUCT_* clsHnd)
         { throw new NotImplementedException("getSharedCCtorHelper"); }
+        private CorInfoHelpFunc getSecurityPrologHelper(CORINFO_METHOD_STRUCT_* ftn)
+        { throw new NotImplementedException("getSecurityPrologHelper"); }
 
         private CORINFO_CLASS_STRUCT_* getTypeForBox(CORINFO_CLASS_STRUCT_* cls)
         {
@@ -2025,6 +2042,9 @@ namespace Internal.JitInterface
             return (uint)fieldDesc.Offset.AsInt;
         }
 
+        private bool isWriteBarrierHelperRequired(CORINFO_FIELD_STRUCT_* field)
+        { throw new NotImplementedException("isWriteBarrierHelperRequired"); }
+
         private CORINFO_FIELD_ACCESSOR getFieldIntrinsic(FieldDesc field)
         {
             Debug.Assert(field.IsIntrinsic);
@@ -2073,14 +2093,14 @@ namespace Internal.JitInterface
             extendOthers = true;
         }
 
-        private void* allocateArray(UIntPtr cBytes)
+        private void* allocateArray(uint cBytes)
         {
-            return (void*)Marshal.AllocHGlobal((IntPtr)(void*)cBytes);
+            return (void*)Marshal.AllocCoTaskMem((int)cBytes);
         }
 
         private void freeArray(void* array)
         {
-            Marshal.FreeHGlobal((IntPtr)array);
+            Marshal.FreeCoTaskMem((IntPtr)array);
         }
 
         private CORINFO_ARG_LIST_STRUCT_* getArgNext(CORINFO_ARG_LIST_STRUCT_* args)
@@ -2189,6 +2209,8 @@ namespace Internal.JitInterface
 
             pEEInfoOut.offsetOfDelegateInstance = (uint)pointerSize;            // Delegate::m_firstParameter
             pEEInfoOut.offsetOfDelegateFirstTarget = OffsetOfDelegateFirstTarget;
+
+            pEEInfoOut.offsetOfObjArrayData = (uint)(2 * pointerSize);
 
             pEEInfoOut.sizeOfReversePInvokeFrame = (uint)(2 * pointerSize);
 
@@ -2379,8 +2401,10 @@ namespace Internal.JitInterface
             }
         }
 
-        private void getLocationOfThisType(CORINFO_METHOD_STRUCT_* context, ref CORINFO_LOOKUP_KIND result)
+        private void getLocationOfThisType(out CORINFO_LOOKUP_KIND result, CORINFO_METHOD_STRUCT_* context)
         {
+            result = new CORINFO_LOOKUP_KIND();
+
             MethodDesc method = HandleToObject(context);
 
             if (method.IsSharedByGenericInstantiations)
@@ -2395,6 +2419,10 @@ namespace Internal.JitInterface
             }
         }
 
+        private void* getPInvokeUnmanagedTarget(CORINFO_METHOD_STRUCT_* method, ref void* ppIndirection)
+        { throw new NotImplementedException("getPInvokeUnmanagedTarget"); }
+        private void* getAddressOfPInvokeFixup(CORINFO_METHOD_STRUCT_* method, ref void* ppIndirection)
+        { throw new NotImplementedException("getAddressOfPInvokeFixup"); }
         private void* GetCookieForPInvokeCalliSig(CORINFO_SIG_INFO* szMetaSig, ref void* ppIndirection)
         { throw new NotImplementedException("GetCookieForPInvokeCalliSig"); }
         private CORINFO_JUST_MY_CODE_HANDLE_* getJustMyCodeHandle(CORINFO_METHOD_STRUCT_* method, ref CORINFO_JUST_MY_CODE_HANDLE_* ppIndirection)
@@ -2478,6 +2506,14 @@ namespace Internal.JitInterface
             return null;
         }
 
+        private void* getMemoryManager()
+        {
+            // This method is completely handled by the C++ wrapper to the JIT-EE interface,
+            // and should never reach the managed implementation.
+            Debug.Fail("CorInfoImpl.getMemoryManager should not be called");
+            throw new NotSupportedException("getMemoryManager");
+        }
+
         private byte[] _code;
         private byte[] _coldCode;
 
@@ -2559,6 +2595,11 @@ namespace Internal.JitInterface
         {
             _gcInfo = new byte[(int)size];
             return (void*)GetPin(_gcInfo);
+        }
+
+        private void yieldExecution()
+        {
+            // Nothing to do
         }
 
         private bool logMsg(uint level, byte* fmt, IntPtr args)
@@ -2749,6 +2790,9 @@ namespace Internal.JitInterface
                     return UInt16.MaxValue;
             }
         }
+
+        private void getModuleNativeEntryPointRange(ref void* pStart, ref void* pEnd)
+        { throw new NotImplementedException("getModuleNativeEntryPointRange"); }
 
         private uint getExpectedTargetArchitecture()
         {

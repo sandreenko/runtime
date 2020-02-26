@@ -2916,6 +2916,15 @@ inline int getJitStressLevel()
     return JitConfig.JitStress();
 }
 
+/*****************************************************************************
+ *  Should we do the strict check for non-virtual call to the virtual method?
+ */
+
+inline DWORD StrictCheckForNonVirtualCallToVirtualMethod()
+{
+    return JitConfig.JitStrictCheckForNonVirtualCallToVirtualMethod() == 1;
+}
+
 #endif // DEBUG
 
 /*****************************************************************************/

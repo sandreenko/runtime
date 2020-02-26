@@ -268,6 +268,8 @@ public:
 
     // ICorJitInfo
 
+    IEEMemoryManager* getMemoryManager();
+
     virtual void allocMem (
             ULONG               hotCodeSize,    /* IN */
             ULONG               coldCodeSize,   /* IN */
@@ -296,6 +298,7 @@ public:
             );
 
     void * allocGCInfo(size_t size);
+    void yieldExecution();
     void setEHcount(unsigned cEH);
     void setEHinfo(unsigned EHnumber, const CORINFO_EH_CLAUSE *clause);
 
@@ -345,7 +348,9 @@ public:
                          BOOL                     fEmbedParent,
                          CORINFO_GENERICHANDLE_RESULT *pResult);
 
-    void getLocationOfThisType(CORINFO_METHOD_HANDLE context, CORINFO_LOOKUP_KIND* pLookupKind);
+    CORINFO_LOOKUP_KIND
+        getLocationOfThisType(CORINFO_METHOD_HANDLE context);
+
 
 
     void * getHelperFtn (CorInfoHelpFunc   ftnNum,
@@ -371,6 +376,8 @@ public:
 
     void * getMethodSync(CORINFO_METHOD_HANDLE ftn,
                          void **ppIndirection);
+    void * getPInvokeUnmanagedTarget(CORINFO_METHOD_HANDLE method,
+                                     void **ppIndirection);
     void * getAddressOfPInvokeFixup(CORINFO_METHOD_HANDLE method,
                                     void **ppIndirection);
     void getAddressOfPInvokeTarget(CORINFO_METHOD_HANDLE method,
@@ -437,6 +444,8 @@ public:
 
     WORD getRelocTypeHint(void * target);
 
+    void getModuleNativeEntryPointRange(void** pStart, void** pEnd);
+
     DWORD getExpectedTargetArchitecture();
 
     // ICorJitInfo delegate ctor optimization
@@ -475,7 +484,7 @@ public:
                  ICorDebugInfo::ILVarInfo **vars, bool *extendOthers);
     void setVars(CORINFO_METHOD_HANDLE ftn, ULONG32 cVars,
                  ICorDebugInfo::NativeVarInfo*vars);
-    void * allocateArray(size_t cBytes);
+    void * allocateArray(ULONG cBytes);
     void freeArray(void *array);
 
     // ICorFieldInfo
@@ -488,6 +497,9 @@ public:
                                        CORINFO_CLASS_HANDLE memberParent);
 
     unsigned getFieldOffset(CORINFO_FIELD_HANDLE field);
+
+    bool isWriteBarrierHelperRequired(
+                        CORINFO_FIELD_HANDLE    field);
 
     void getFieldInfo (CORINFO_RESOLVED_TOKEN * pResolvedToken,
                        CORINFO_METHOD_HANDLE  callerHandle,
@@ -510,6 +522,7 @@ public:
                                   BOOL fAssembly);
     BOOL isValueClass(CORINFO_CLASS_HANDLE clsHnd);
     CorInfoInlineTypeCheck canInlineTypeCheck(CORINFO_CLASS_HANDLE cls, CorInfoInlineTypeCheckSource source);
+    BOOL canInlineTypeCheckWithObjectVTable(CORINFO_CLASS_HANDLE clsHnd);
     DWORD getClassAttribs(CORINFO_CLASS_HANDLE cls);
     BOOL isStructRequiringStackAllocRetBuf(CORINFO_CLASS_HANDLE cls);
     CORINFO_MODULE_HANDLE getClassModule(CORINFO_CLASS_HANDLE cls);
@@ -541,6 +554,7 @@ public:
     CorInfoHelpFunc getCastingHelper(CORINFO_RESOLVED_TOKEN * pResolvedToken, bool fThrowing);
     CorInfoHelpFunc getNewArrHelper(CORINFO_CLASS_HANDLE arrayCls);
     CorInfoHelpFunc getSharedCCtorHelper(CORINFO_CLASS_HANDLE clsHnd);
+    CorInfoHelpFunc getSecurityPrologHelper(CORINFO_METHOD_HANDLE ftn);
     CORINFO_CLASS_HANDLE getTypeForBox(CORINFO_CLASS_HANDLE  cls);
     CorInfoHelpFunc getBoxHelper(CORINFO_CLASS_HANDLE cls);
     CorInfoHelpFunc getUnBoxHelper(CORINFO_CLASS_HANDLE cls);
@@ -580,6 +594,7 @@ public:
     BOOL isMoreSpecificType(CORINFO_CLASS_HANDLE cls1,
                                 CORINFO_CLASS_HANDLE cls2);
 
+    BOOL shouldEnforceCallvirtRestriction(CORINFO_MODULE_HANDLE scope);
     CORINFO_CLASS_HANDLE getParentType(CORINFO_CLASS_HANDLE  cls);
     CorInfoType getChildType (CORINFO_CLASS_HANDLE       clsHnd,
                               CORINFO_CLASS_HANDLE       *clsRet);
@@ -609,6 +624,7 @@ public:
                            unsigned metaTOK,
                            __out_ecount (FQNameCapacity) char * szFQName,
                            size_t FQNameCapacity);
+    CorInfoCanSkipVerificationResult canSkipVerification (CORINFO_MODULE_HANDLE module);
     BOOL isValidToken(CORINFO_MODULE_HANDLE module,
                       unsigned metaTOK);
     BOOL isValidStringRef(CORINFO_MODULE_HANDLE module,
@@ -645,6 +661,13 @@ public:
                                  CorInfoInline inlineResult,
                                  const char * reason);
 
+    CorInfoInstantiationVerification isInstantiationOfVerifiedGeneric(
+            CORINFO_METHOD_HANDLE   method);
+
+    void initConstraintsForVerification(CORINFO_METHOD_HANDLE method,
+                                        BOOL *pfHasCircularClassConstraints,
+                                        BOOL *pfHasCircularMethodConstraints);
+
     bool canTailCall(CORINFO_METHOD_HANDLE caller,
                      CORINFO_METHOD_HANDLE declaredCallee,
                      CORINFO_METHOD_HANDLE exactCallee,
@@ -655,6 +678,9 @@ public:
                                  bool fIsTailPrefix,
                                  CorInfoTailCall tailCallResult,
                                  const char * reason);
+
+    CorInfoCanSkipVerificationResult canSkipMethodVerification (
+            CORINFO_METHOD_HANDLE   callerHnd);
 
     void getEHinfo(CORINFO_METHOD_HANDLE ftn,
                              unsigned EHnumber, CORINFO_EH_CLAUSE* clause);
