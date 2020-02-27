@@ -5029,8 +5029,7 @@ void Compiler::fgAddSkippedRegsInPromotedStructArg(LclVarDsc* varDsc,
 //
 void Compiler::fgFixupStructReturn(GenTree* callNode)
 {
-    char* nofixup = getenv("nofixup");
-    if (nofixup != nullptr)
+    if (compNoReturnRetyping())
     {
         return;
     }
