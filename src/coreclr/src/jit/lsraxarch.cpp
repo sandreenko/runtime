@@ -754,6 +754,51 @@ void LinearScan::getTgtPrefOperands(GenTreeOp* tree, bool& prefOp1, bool& prefOp
     }
 }
 
+//------------------------------------------------------------------------
+// BuildBlockStoreFromACall: Build the RefPositions for a block store node with a bitcast(call) as the source.
+//
+// Arguments:
+//    blkNode - The block store node of interest
+//
+// Return Value:
+//    The number of sources consumed by this node.
+//
+// Notes:
+//   The source fits into a single register, codegen will generate one mov for it.
+//
+int LinearScan::BuildBlockStoreFromACall(GenTreeBlk* blkNode)
+{
+    assert(!compiler->compAllowReturnRetyping());
+    assert(blkNode->OperIs(GT_STORE_OBJ, GT_STORE_BLK));
+    assert(blkNode->Data()->OperIs(GT_BITCAST));
+    assert(blkNode->GetLayout()->GetRegisterType() != TYP_UNDEF);
+
+    int useCount = 0;
+
+    GenTreeUnOp* src = blkNode->Data()->AsUnOp();
+    assert(src->gtGetOp1()->IsCall());
+    assert(!varTypeIsStruct(src->gtGetOp1()));
+    assert(!src->isContained());
+    useCount++;
+    BuildUse(src);
+
+    GenTree* dstAddr = blkNode->Addr();
+    if (!dstAddr->isContained())
+    {
+        useCount++;
+        BuildUse(dstAddr);
+    }
+    else if (dstAddr->OperIsAddrMode())
+    {
+        useCount += BuildAddrUses(dstAddr);
+    }
+
+    regMaskTP killMask = getKillSetForBlockStore(blkNode);
+    BuildDefsWithKills(blkNode, 0, RBM_NONE, killMask);
+
+    return useCount;
+}
+
 //------------------------------------------------------------------------------
 // isRMWRegOper: Can this binary tree node be used in a Read-Modify-Write format
 //
@@ -1347,6 +1392,12 @@ int LinearScan::BuildBlockStore(GenTreeBlk* blkNode)
     }
     else
     {
+        if (src->OperIs(GT_BITCAST) && src->AsUnOp()->gtGetOp1()->IsCall())
+        {
+            assert(!compiler->compAllowReturnRetyping());
+            return BuildBlockStoreFromACall(blkNode);
+        }
+
         if (src->OperIs(GT_IND))
         {
             assert(src->isContained());

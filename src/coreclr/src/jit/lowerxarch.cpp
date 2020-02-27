@@ -219,9 +219,8 @@ void Lowering::LowerBlockStore(GenTreeBlk* blkNode)
 #endif
         }
     }
-    else
+    else if (src->OperIs(GT_IND, GT_LCL_VAR, GT_LCL_FLD))
     {
-        assert(src->OperIs(GT_IND, GT_LCL_VAR, GT_LCL_FLD));
         src->SetContained();
 
         if (src->OperIs(GT_IND))
@@ -320,6 +319,20 @@ void Lowering::LowerBlockStore(GenTreeBlk* blkNode)
             // TODO-X86-CQ: Investigate whether a helper call would be beneficial on x86
             blkNode->gtBlkOpKind = GenTreeBlk::BlkOpKindRepInstr;
 #endif
+        }
+    }
+    else
+    {
+        assert(!comp->compAllowReturnRetyping());
+        assert(src->OperIs(GT_BITCAST));
+        assert(varTypeIsStruct(src));
+        if (blkNode->OperIs(GT_STORE_OBJ) && !blkNode->AsObj()->GetLayout()->HasGCPtr())
+        {
+            blkNode->SetOper(GT_STORE_BLK);
+        }
+        if (blkNode->OperIs(GT_STORE_BLK))
+        {
+            blkNode->gtBlkOpKind = GenTreeBlk::BlkOpKindUnroll;
         }
     }
 }
