@@ -1075,10 +1075,20 @@ private:
         var_types type = tree->TypeGet();
         if (type == TYP_STRUCT)
         {
-            assert(tree->OperIs(GT_LCL_VAR, GT_STORE_LCL_VAR));
-            GenTreeLclVar* lclVar = tree->AsLclVar();
-            LclVarDsc*     varDsc = compiler->lvaGetDesc(lclVar);
-            type                  = varDsc->GetRegisterType(lclVar);
+            // Need to find the register type.
+            if (tree->OperIsLocal())
+            {
+                GenTreeLclVar* lclVar = tree->AsLclVar();
+                LclVarDsc*     varDsc = compiler->lvaGetDesc(lclVar);
+                type                  = varDsc->GetRegisterType(lclVar);
+            }
+            else
+            {
+                assert(!compiler->compAllowReturnRetyping());
+                assert(tree->OperIs(GT_BITCAST));
+                type = tree->AsUnOp()->gtGetOp1()->gtType;
+                assert(!varTypeIsStruct(type));
+            }
         }
         assert(type != TYP_UNDEF && type != TYP_STRUCT);
         return type;
@@ -1581,6 +1591,8 @@ private:
     int BuildCast(GenTreeCast* cast);
 
 #if defined(TARGET_XARCH)
+    int BuildBlockStoreFromACall(GenTreeBlk* blkNode);
+
     // returns true if the tree can use the read-modify-write memory instruction form
     bool isRMWRegOper(GenTree* tree);
     int BuildMul(GenTree* tree);
