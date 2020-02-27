@@ -117,6 +117,17 @@ void Lowering::LowerStoreIndir(GenTreeIndir* node)
     // whether it represents a RMW memory op.
     node->AsStoreInd()->SetRMWStatusDefault();
 
+    if (node->TypeIs(TYP_SIMD8))
+    {
+        GenTree* src = node->gtGetOp2();
+        if (src->OperIs(GT_CALL))
+        {
+            assert(!comp->compDoOldStructRetyping());
+            assert(src->TypeIs(TYP_LONG));
+            node->ChangeType(src->TypeGet());
+        }
+    }
+
     if (!varTypeIsFloating(node))
     {
         // Perform recognition of trees with the following structure:
@@ -219,9 +230,8 @@ void Lowering::LowerBlockStore(GenTreeBlk* blkNode)
 #endif
         }
     }
-    else
+    else if (src->OperIs(GT_IND, GT_LCL_VAR, GT_LCL_FLD))
     {
-        assert(src->OperIs(GT_IND, GT_LCL_VAR, GT_LCL_FLD));
         src->SetContained();
 
         if (src->OperIs(GT_IND))
@@ -321,6 +331,20 @@ void Lowering::LowerBlockStore(GenTreeBlk* blkNode)
             blkNode->gtBlkOpKind = GenTreeBlk::BlkOpKindRepInstr;
 #endif
         }
+    }
+    else
+    {
+        assert(!comp->compDoOldStructRetyping());
+        assert(src->OperIs(GT_CALL));
+        assert(blkNode->TypeIs(TYP_STRUCT));
+        var_types nativeType = blkNode->GetLayout()->GetRegisterType();
+        assert(nativeType != TYP_STRUCT && nativeType != TYP_UNKNOWN);
+        var_types actualType = genActualType(nativeType);
+        assert(src->TypeIs(actualType));
+        blkNode->ChangeType(actualType);
+        GenTreeIndir* indirNode = blkNode;
+        indirNode->SetOper(GT_STOREIND);
+        LowerStoreIndir(indirNode);
     }
 }
 
