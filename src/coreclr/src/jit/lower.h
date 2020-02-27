@@ -132,6 +132,9 @@ private:
     GenTreeCC* LowerNodeCC(GenTree* node, GenCondition condition);
     void LowerJmpMethod(GenTree* jmp);
     void LowerRet(GenTreeUnOp* ret);
+#if !FEATURE_MULTIREG_RET
+    void LowerRetLclVar(GenTreeUnOp* ret);
+#endif
     GenTree* LowerDelegateInvoke(GenTreeCall* call);
     GenTree* LowerIndirectNonvirtCall(GenTreeCall* call);
     GenTree* LowerDirectCall(GenTreeCall* call);
