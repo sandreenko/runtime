@@ -4726,11 +4726,33 @@ void CodeGen::genCodeForStoreLclVar(GenTreeLclVar* tree)
         var_types op1Type = op1->TypeGet();
         if (op1Type == TYP_STRUCT)
         {
-            assert(op1->IsLocal());
-            GenTreeLclVar* op1LclVar = op1->AsLclVar();
-            unsigned       op1lclNum = op1LclVar->GetLclNum();
-            LclVarDsc*     op1VarDsc = compiler->lvaGetDesc(op1lclNum);
-            op1Type                  = op1VarDsc->GetRegisterType(op1LclVar);
+            if (op1->IsLocal())
+            {
+                GenTreeLclVar* op1LclVar = op1->AsLclVar();
+                unsigned       op1lclNum = op1LclVar->GetLclNum();
+                LclVarDsc*     op1VarDsc = compiler->lvaGetDesc(op1lclNum);
+                op1Type                  = op1VarDsc->GetRegisterType(op1LclVar);
+            }
+            else
+            {
+                assert(op1->OperIs(GT_BITCAST));
+                // That is an agly case where we import:
+                // [000153] -AC---------              *  ASG       struct (copy)
+                // [000152] *-----------              +--*  BLK       struct<Internal.TypeSystem.LayoutInt, 4>
+                // [000151] ------------              |  \--*  ADDR      byref
+                // [000150] ------------              |     \--*  LCL_VAR   int    V45 tmp41
+                // [000148] --C-G-------              \--*  CALL nullcheck struct
+                // Internal.TypeSystem.DefType.get_InstanceFieldSize
+                // [000147] ------------ this in rcx     \--*  LCL_VAR   ref    V03 loc1
+                // and fgMorphOneAsgBlock tranforms it into:
+                // [000153] -ACXG-------              *  ASG       int
+                // [000150] D----+-N----              +--*  LCL_VAR   int    V45 tmp41
+                // [000148] --CXG+------              \--*  CALL nullcheck struct
+                // Internal.TypeSystem.DefType.get_InstanceFieldSize
+                // [000147] -----+------ this in rcx     \--*  LCL_VAR   ref    V08 tmp4
+                // so types do not match.
+                op1Type = op1->AsUnOp()->gtGetOp1()->TypeGet();
+            }
         }
         assert(varTypeUsesFloatReg(targetType) == varTypeUsesFloatReg(op1Type));
         assert(!varTypeUsesFloatReg(targetType) || (emitTypeSize(targetType) == emitTypeSize(op1Type)));

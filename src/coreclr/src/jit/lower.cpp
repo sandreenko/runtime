@@ -3162,17 +3162,18 @@ void Lowering::LowerRet(GenTreeUnOp* ret)
         ContainCheckBitCast(bitcast);
     }
 
-#if 0
-    if (varTypeIsStruct(ret))
+    else
     {
-        ret->gtType = genActualType(comp->info.compRetNativeType);
-    }
-    if (ret->gtType != TYP_VOID)
-    {
-        GenTree* retVal = ret->gtOp1;
-
-        if (varTypeIsStruct(retVal))
+        assert((ret->TypeGet() == TYP_VOID) ||
+               (varTypeIsStruct(ret->TypeGet()) == varTypeIsStruct(ret->gtGetOp1()->TypeGet())));
+        if (varTypeIsStruct(ret))
         {
+            assert(comp->compNoReturnRetyping());
+            GenTree*  retVal           = ret->gtGetOp1();
+            var_types nativeReturnType = genActualType(comp->info.compRetNativeType);
+
+            ret->ChangeType(nativeReturnType);
+
             // That is a mess when we have smth like:
             // [000003] -- - XG------ - *  RETURN    long
             // [000002] -- - XG------ - \-- * FIELD     struct m_fieldHandle
@@ -3187,10 +3188,14 @@ void Lowering::LowerRet(GenTreeUnOp* ret)
             // we will mess with STORE_BLK(IND) case.
             // seandree: doesn't FIELD require an address instead of LCL_VAR?
             assert(retVal->OperIs(GT_IND, GT_OBJ, GT_LCL_VAR, GT_LCL_FLD, GT_BITCAST, GT_CNS_INT, GT_SIMD));
-            retVal->gtType = ret->gtType;
-            if (retVal->OperIs(GT_OBJ))
+            assert(retVal->OperIs(GT_OBJ, GT_IND, GT_LCL_VAR, GT_CNS_INT, GT_BITCAST));
+            if (retVal->OperIs(GT_OBJ, GT_IND))
             {
-                retVal->ChangeOper(GT_IND);
+                retVal->ChangeType(nativeReturnType);
+                if (retVal->OperIs(GT_OBJ))
+                {
+                    retVal->ChangeOper(GT_IND);
+                }
             }
 
             else if (retVal->OperIs(GT_LCL_VAR))
@@ -3209,13 +3214,23 @@ void Lowering::LowerRet(GenTreeUnOp* ret)
                     JITDUMP(
                         "Replacing independently promoted parent local var with its only field for the return %u, %u\n",
                         lclNum, fieldLclNum);
+                    LclVarDsc* fieldDsc = comp->lvaGetDesc(fieldLclNum);
+                    retVal->ChangeType(fieldDsc->lvType);
                 }
-            }
 
-            // TODO seandree: check that unOp has struct handle.
+                GenTreeUnOp* bitcast = new (comp, GT_BITCAST) GenTreeOp(GT_BITCAST, ret->TypeGet(), retVal, nullptr);
+                ret->gtOp1           = bitcast;
+                BlockRange().InsertBefore(ret, bitcast);
+                ContainCheckBitCast(bitcast);
+
+                // TODO seandree: check that unOp has struct handle.
+            }
+            else if (retVal->OperIs(GT_CNS_INT, GT_BITCAST))
+            {
+                retVal->ChangeType(nativeReturnType);
+            }
         }
     }
-#endif
 
     // Method doing PInvokes has exactly one return block unless it has tail calls.
     if (comp->compMethodRequiresPInvokeFrame() && (comp->compCurBB == comp->genReturnBB))

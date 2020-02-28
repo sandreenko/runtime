@@ -16897,7 +16897,16 @@ bool Compiler::impReturnInstruction(int prefixFlags, OPCODE& opcode)
 #endif
         op2 = impFixupStructReturnType(op2, retClsHnd);
         // return op2
-        op1 = gtNewOperNode(GT_RETURN, genActualType(info.compRetNativeType), op2);
+        var_types returnType;
+        if (compNoReturnRetyping())
+        {
+            returnType = info.compRetType;
+        }
+        else
+        {
+            returnType = info.compRetNativeType;
+        }
+        op1 = gtNewOperNode(GT_RETURN, genActualType(returnType), op2);
     }
     else
     {
