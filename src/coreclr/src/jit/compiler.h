@@ -2633,7 +2633,7 @@ public:
     fgArgTabEntry* gtArgEntryByLateArgIndex(GenTreeCall* call, unsigned lateArgInx);
     static GenTree* gtArgNodeByLateArgInx(GenTreeCall* call, unsigned lateArgInx);
 
-    GenTree* gtNewAssignNode(GenTree* dst, GenTree* src);
+    GenTreeOp* gtNewAssignNode(GenTree* dst, GenTree* src);
 
     GenTree* gtNewTempAssign(unsigned    tmp,
                              GenTree*    val,

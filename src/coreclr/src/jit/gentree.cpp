@@ -6417,7 +6417,7 @@ GenTree* Compiler::gtArgNodeByLateArgInx(GenTreeCall* call, unsigned lateArgInx)
  *  Create a node that will assign 'src' to 'dst'.
  */
 
-GenTree* Compiler::gtNewAssignNode(GenTree* dst, GenTree* src)
+GenTreeOp* Compiler::gtNewAssignNode(GenTree* dst, GenTree* src)
 {
     /* Mark the target as being assigned */
 
@@ -6434,7 +6434,7 @@ GenTree* Compiler::gtNewAssignNode(GenTree* dst, GenTree* src)
 
     /* Create the assignment node */
 
-    GenTree* asg = gtNewOperNode(GT_ASG, dst->TypeGet(), dst, src);
+    GenTreeOp* asg = gtNewOperNode(GT_ASG, dst->TypeGet(), dst, src)->AsOp();
 
     /* Mark the expression as containing an assignment */
 
