@@ -9454,7 +9454,7 @@ GenTree* Compiler::fgMorphGetStructAddr(GenTree** pTree, CORINFO_CLASS_HANDLE cl
 
 GenTree* Compiler::fgMorphBlkNode(GenTree* tree, bool isDest)
 {
-    JITDUMP("fgMorphBlkNode for %s tree, before:\n", (isDest? "dst" : "src"));
+    JITDUMP("fgMorphBlkNode for %s tree, before:\n", (isDest ? "dst" : "src"));
     DISPTREE(tree);
     GenTree* handleTree = nullptr;
     GenTree* addr       = nullptr;
@@ -11338,6 +11338,37 @@ GenTree* Compiler::fgMorphSmpOp(GenTree* tree, MorphAddrContext* mac)
 
                 return tree;
             }
+            if (tree->TypeIs(TYP_STRUCT) && op1->OperIs(GT_OBJ, GT_BLK))
+            {
+                assert(compNoReturnRetyping());
+                GenTree* addr = op1->AsBlk()->Addr();
+                // TODO: THAT IS NOT PRECISE, WE SHOULD FIX THAT LOGIC!
+                if (addr->OperIs(GT_ADDR) && addr->gtGetOp1()->OperIs(GT_LCL_VAR))
+                {
+                    GenTreeLclVar* lclVar = addr->gtGetOp1()->AsLclVar();
+                    assert(!gtIsActiveCSE_Candidate(addr) && !gtIsActiveCSE_Candidate(op1));
+                    // TODO: that logic should be put under GT_IND, GT_OBJ morph,
+                    // with appropriate checks for size, volatile flags etc.
+                    // The logic also exists in `fgMorphBlkNode` and that makes everything hard.
+                    // Also it exists in GT_IND fgMorphSmpOp.
+                    if (gtGetStructHandle(tree) == gtGetStructHandleIfPresent(lclVar))
+                    {
+                        tree->AsUnOp()->gtOp1 = op1;
+                        DEBUG_DESTROY_NODE(op1);
+                        DEBUG_DESTROY_NODE(addr);
+                        op1 = lclVar;
+                    }
+                    else
+                    {
+                        // TODO: lowering should replace it with a bitcast if the sizes match.
+                        lvaSetVarDoNotEnregister(lclVar->GetLclNum() DEBUGARG(DNER_BlockOp));
+                    }
+                }
+                else
+                {
+                    // that could be index, for example.
+                }
+            }
             break;
 
         case GT_EQ:
@@ -12778,19 +12809,6 @@ DONE_MORPHING_CHILDREN:
                 GenTreeUnOp* addr   = op1->AsUnOp();
                 GenTree*     addrOp = addr->gtGetOp1();
                 tree->gtFlags |= (addrOp->gtFlags & GTF_GLOB_REF);
-                // if (addrOp->OperIs(GT_LCL_VAR) && (tree->gtType != addrOp->gtType))
-                //{
-                //    //assert(compNoReturnRetyping());
-                //    unsigned lclNum = addrOp->AsLclVar()->GetLclNum();
-                //    // That is for
-                //    // [000005] --CXG------ - * RETURN    struct
-                //    // [000004] --CXG------ - \-- * OBJ       struct < System.Runtime.Intrinsics.Vector64`1[Double], 8
-                //    >
-                //    // [000006] ------------      \--* ADDR      byref
-                //    // [000007] ------------         \--* LCL_VAR   double V00 arg0
-                //    // TODO seandree: optimize it to fold OBJ struct(ADDR) as bitcast in lower.
-                //    lvaSetVarDoNotEnregister(lclNum DEBUGARG(DNER_LocalField));
-                //}
             }
             break;
 

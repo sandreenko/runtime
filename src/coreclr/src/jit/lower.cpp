@@ -3164,8 +3164,26 @@ void Lowering::LowerRet(GenTreeUnOp* ret)
 
     else
     {
-        assert((ret->TypeGet() == TYP_VOID) ||
-               (varTypeIsStruct(ret->TypeGet()) == varTypeIsStruct(ret->gtGetOp1()->TypeGet())));
+#ifdef DEBUG
+        if (ret->TypeGet() != TYP_VOID)
+        {
+            if (varTypeIsStruct(ret->TypeGet()) != varTypeIsStruct(ret->gtGetOp1()->TypeGet()))
+            {
+                // This could happen if we lied about op1 type during struct promotion,
+                // for a struct with a struct field that could be retyped as primitive,
+                // check `retypedFieldsMap` for details.
+                GenTree* retVal = ret->gtGetOp1();
+                if (retVal->IsLocal())
+                {
+                    GenTreeLclVar* lclVar = retVal->AsLclVar();
+                    LclVarDsc*     varDsc = comp->lvaGetDesc(lclVar);
+                    assert(varDsc->lvIsStructField);
+                }
+                assert(genActualType(comp->info.compRetNativeType) == genActualType(retVal->TypeGet()));
+            }
+        }
+#endif
+
         if (varTypeIsStruct(ret))
         {
             assert(comp->compNoReturnRetyping());
@@ -3188,7 +3206,7 @@ void Lowering::LowerRet(GenTreeUnOp* ret)
             // we will mess with STORE_BLK(IND) case.
             // seandree: doesn't FIELD require an address instead of LCL_VAR?
             assert(retVal->OperIs(GT_IND, GT_OBJ, GT_LCL_VAR, GT_LCL_FLD, GT_BITCAST, GT_CNS_INT, GT_SIMD));
-            assert(retVal->OperIs(GT_OBJ, GT_IND, GT_LCL_VAR, GT_CNS_INT, GT_BITCAST));
+            assert(retVal->OperIs(GT_IND, GT_OBJ, GT_LCL_VAR, GT_BITCAST, GT_CNS_INT, GT_SIMD));
             if (retVal->OperIs(GT_OBJ, GT_IND))
             {
                 retVal->ChangeType(nativeReturnType);
@@ -3228,6 +3246,13 @@ void Lowering::LowerRet(GenTreeUnOp* ret)
             else if (retVal->OperIs(GT_CNS_INT, GT_BITCAST))
             {
                 retVal->ChangeType(nativeReturnType);
+            }
+            else if (retVal->OperIs(GT_SIMD))
+            {
+                GenTreeUnOp* bitcast = new (comp, GT_BITCAST) GenTreeOp(GT_BITCAST, ret->TypeGet(), retVal, nullptr);
+                ret->gtOp1           = bitcast;
+                BlockRange().InsertBefore(ret, bitcast);
+                ContainCheckBitCast(bitcast);
             }
         }
     }
