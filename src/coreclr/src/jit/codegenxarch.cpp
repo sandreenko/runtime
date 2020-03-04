@@ -3697,41 +3697,32 @@ void CodeGen::genCodeForCpObj(GenTreeObj* cpObjNode)
             instruction ins      = ins_Store(cpObjNode->TypeGet());
             emitAttr    sizeAttr = EA_ATTR(size);
             regNumber   srcReg   = source->GetRegNum();
-            int         offset   = 0;
-            if (actualDstAddr->IsLocal())
+
+            if (actualDstAddr->GetReg() != REG_NA)
             {
-                dstLclVarNum = actualDstAddr->AsLclVarCommon()->GetLclNum();
+                GetEmitter()->emitIns_AR_R(ins, sizeAttr, srcReg, actualDstAddr->GetReg(), 0);
             }
-            else if (actualDstAddr->OperIs(GT_ADD))
+            else
             {
-                GenTreeOp* add  = actualDstAddr->AsOp();
-                offset          = static_cast<int>(add->gtOp2->AsIntCon()->IconValue());
-                GenTree* addOp1 = add->gtOp1;
-                if (addOp1->OperIs(GT_LCL_VAR))
+                int offset = 0;
+                if (actualDstAddr->IsLocal())
                 {
-                    dstLclVarNum = add->gtOp1->AsLclVar()->GetLclNum();
+                    dstLclVarNum = actualDstAddr->AsLclVarCommon()->GetLclNum();
+                }
+                else if (actualDstAddr->OperIs(GT_ADD))
+                {
+                    GenTreeOp* add  = actualDstAddr->AsOp();
+                    offset          = static_cast<int>(add->gtOp2->AsIntCon()->IconValue());
+                    GenTree* addOp1 = add->gtOp1;
+                    dstLclVarNum    = add->gtOp1->AsLclVar()->GetLclNum();
                 }
                 else
                 {
-                    // That could happen for a field that was optimized as IND(CNST);
-                    assert(actualDstAddr->GetReg() != REG_NA);
+                    assert(actualDstAddr->IsLocalAddrExpr());
+                    dstLclVarNum = actualDstAddr->AsLclVarCommon()->GetLclNum();
                 }
-            }
-            else
-            {
-                assert(actualDstAddr->IsLocalAddrExpr());
-                dstLclVarNum = actualDstAddr->AsLclVarCommon()->GetLclNum();
-            }
-
-            if (actualDstAddr->GetReg() == REG_NA)
-            {
                 assert(dstLclVarNum != BAD_VAR_NUM);
                 GetEmitter()->emitIns_S_R(ins, sizeAttr, srcReg, dstLclVarNum, offset);
-            }
-            else
-            {
-                assert(offset == 0 || actualDstAddr->OperIs(GT_ADD));
-                GetEmitter()->emitIns_R_R(ins, sizeAttr, srcReg, actualDstAddr->GetReg());
             }
 
             genConsumeOperands(cpObjNode);

@@ -9189,8 +9189,9 @@ GenTree* Compiler::impFixupStructReturnType(GenTree* op, CORINFO_CLASS_HANDLE re
     assert(varTypeIsStruct(info.compRetType));
     assert(info.compRetBuffArg == BAD_VAR_NUM);
 
-    if (compNoReturnRetyping())
+    if (compNoReturnRetyping() && (!op->IsCall() || !op->AsCall()->TreatAsHasRetBufArg(this)))
     {
+        // TODO: deal with these 2 special JIT intrinsics that don't have return buffer, but act like they do.
         return op;
     }
 

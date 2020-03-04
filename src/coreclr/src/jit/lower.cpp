@@ -3169,15 +3169,41 @@ void Lowering::LowerRet(GenTreeUnOp* ret)
         {
             if (varTypeIsStruct(ret->TypeGet()) != varTypeIsStruct(ret->gtGetOp1()->TypeGet()))
             {
-                // This could happen if we lied about op1 type during struct promotion,
-                // for a struct with a struct field that could be retyped as primitive,
-                // check `retypedFieldsMap` for details.
+
                 GenTree* retVal = ret->gtGetOp1();
-                if (retVal->IsLocal())
+                if (retVal->OperIs(GT_LCL_VAR))
                 {
+                    // This could happen if we lied about op1 type during struct promotion,
+                    // for a struct with a struct field that could be retyped as primitive,
+                    // check `retypedFieldsMap` for details.
                     GenTreeLclVar* lclVar = retVal->AsLclVar();
                     LclVarDsc*     varDsc = comp->lvaGetDesc(lclVar);
                     assert(varDsc->lvIsStructField);
+                }
+                else
+                {
+                    assert(retVal->OperIs(GT_LCL_FLD));
+                    // 'special' helpers that return true from `TreatAsHasRetBufArg`
+                    // and can create trees like:
+                    // N004 (  3,  2) [000018] -------N----        t18 =    LCL_VAR_ADDR byref  V05 tmp1
+                    //                                                   *    bool   V05.hasValue (offs=0x00) -> V08
+                    //                                                   tmp4
+                    //                                                   *    bool   V05.value (offs=0x01) -> V09 tmp5
+                    // N006 (  3,  2) [000015] ------------        t15 =    LCL_VAR   ref   (AX) V02 loc0          $380
+                    // N007 (  3, 10) [000016] ------------        t16 =    CNS_INT(h) long   0xd1ffab1e class $1c1
+                    //                                                   /--*  t18    byref  arg0 in rcx
+                    //                                                   +--*  t15    ref    arg2 in r8
+                    //                                                   +--*  t16    long   arg1 in rdx
+                    // N008 ( 23, 23) [000017] --CXG-------              *  CALL help void
+                    // HELPER.CORINFO_HELP_UNBOX_NULLABLE $206
+                    // N001 (  4,  5) [000020] ------------        t20 =    LCL_FLD   short  V05 tmp1         [+0]
+                    //                                                   *    bool   V05.hasValue (offs=0x00) -> V08
+                    //                                                   tmp4
+                    //                                                   *    bool   V05.value (offs=0x01) -> V09 tmp5
+                    //                                                   $400
+                    //                                                   /--*  t20    short
+                    // N002 (  5,  6) [000021] ----G-------              *  RETURN    struct $2c2
+                    // find a way to get rid of them.
                 }
                 assert(genActualType(comp->info.compRetNativeType) == genActualType(retVal->TypeGet()));
             }
@@ -3206,7 +3232,6 @@ void Lowering::LowerRet(GenTreeUnOp* ret)
             // we will mess with STORE_BLK(IND) case.
             // seandree: doesn't FIELD require an address instead of LCL_VAR?
             assert(retVal->OperIs(GT_IND, GT_OBJ, GT_LCL_VAR, GT_LCL_FLD, GT_BITCAST, GT_CNS_INT, GT_SIMD));
-            assert(retVal->OperIs(GT_IND, GT_OBJ, GT_LCL_VAR, GT_BITCAST, GT_CNS_INT, GT_SIMD));
             if (retVal->OperIs(GT_OBJ, GT_IND))
             {
                 retVal->ChangeType(nativeReturnType);
@@ -3247,7 +3272,7 @@ void Lowering::LowerRet(GenTreeUnOp* ret)
             {
                 retVal->ChangeType(nativeReturnType);
             }
-            else if (retVal->OperIs(GT_SIMD))
+            else if (retVal->OperIs(GT_SIMD, GT_LCL_FLD))
             {
                 GenTreeUnOp* bitcast = new (comp, GT_BITCAST) GenTreeOp(GT_BITCAST, ret->TypeGet(), retVal, nullptr);
                 ret->gtOp1           = bitcast;

@@ -8952,8 +8952,35 @@ public:
 
     bool compNoReturnRetyping()
     {
-        char* nofixup = getenv("nofixup");
-        return (nofixup != nullptr);
+        char* nofixupFrom = getenv("nofixup");
+        bool  noRetyping  = (nofixupFrom != nullptr);
+        if (noRetyping)
+        {
+            int startRetypingFrom = 0;
+            int len               = (int)strlen(nofixupFrom);
+            for (int i = 0; i < len; ++i)
+            {
+                startRetypingFrom *= 10;
+                startRetypingFrom += (nofixupFrom[i] - '0');
+            }
+            if ((int)Compiler::jitTotalMethodCompiled > startRetypingFrom)
+            {
+                char* nofixupTo       = getenv("nofixupTo");
+                int   startRetypingTo = 0;
+                len                   = (int)strlen(nofixupTo);
+                for (int i = 0; i < len; ++i)
+                {
+                    startRetypingTo *= 10;
+                    startRetypingTo += (nofixupTo[i] - '0');
+                }
+                if (startRetypingTo > (int)Compiler::jitTotalMethodCompiled)
+                {
+                    // printf("do not retype\n");
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     // Returns true if the method returns a value in more than one return register
