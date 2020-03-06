@@ -9625,6 +9625,7 @@ GenTree* Compiler::fgMorphBlockOperand(GenTree* tree, var_types asgType, unsigne
         }
         else if (effectiveVal->TypeGet() != asgType)
         {
+#if !FEATURE_MULTIREG_RET
             if (compNoReturnRetyping())
             {
                 // TODO seandree: see if we can get rid of these cases or add a cast node.
@@ -9639,6 +9640,10 @@ GenTree* Compiler::fgMorphBlockOperand(GenTree* tree, var_types asgType, unsigne
             {
                 unreached();
             }
+#else  // FEATURE_MULTIREG_RET
+            GenTree* addr = gtNewOperNode(GT_ADDR, TYP_BYREF, effectiveVal);
+            effectiveVal  = gtNewIndir(asgType, addr);
+#endif // FEATURE_MULTIREG_RET
         }
     }
     else
