@@ -1155,14 +1155,6 @@ namespace Internal.JitInterface
         private bool shouldEnforceCallvirtRestriction(CORINFO_MODULE_STRUCT_* scope)
         { throw new NotImplementedException("shouldEnforceCallvirtRestriction"); }
 
-        private char* getStringLiteral(CORINFO_MODULE_STRUCT_* module, uint metaTOK, ref int length)
-        {
-            MethodIL methodIL = (MethodIL)HandleToObject((IntPtr)module);
-            string s = (string)methodIL.GetObject((int)metaTOK);
-            length = (int)s.Length;
-            return (char*)GetPin(s);
-        }
-
         private CorInfoType asCorInfoType(CORINFO_CLASS_STRUCT_* cls)
         {
             var type = HandleToObject(cls);
@@ -1199,7 +1191,7 @@ namespace Internal.JitInterface
         }
 
 
-        private int appendClassName(char** ppBuf, ref int pnBufLen, CORINFO_CLASS_STRUCT_* cls, bool fNamespace, bool fFullInst, bool fAssembly)
+        private int appendClassName(short** ppBuf, ref int pnBufLen, CORINFO_CLASS_STRUCT_* cls, bool fNamespace, bool fFullInst, bool fAssembly)
         {
             // We support enough of this to make SIMD work, but not much else.
 
@@ -1211,13 +1203,13 @@ namespace Internal.JitInterface
             int length = name.Length;
             if (pnBufLen > 0)
             {
-                char* buffer = *ppBuf;
+                short* buffer = *ppBuf;
                 for (int i = 0; i < Math.Min(name.Length, pnBufLen); i++)
-                    buffer[i] = name[i];
+                    buffer[i] = (short)name[i];
                 if (name.Length < pnBufLen)
-                    buffer[name.Length] = (char)0;
+                    buffer[name.Length] = 0;
                 else
-                    buffer[pnBufLen - 1] = (char)0;
+                    buffer[pnBufLen - 1] = 0;
                 pnBufLen -= length;
                 *ppBuf = buffer + length;
             }
@@ -2162,7 +2154,7 @@ namespace Internal.JitInterface
 
         private HRESULT GetErrorHRESULT(_EXCEPTION_POINTERS* pExceptionPointers)
         { throw new NotImplementedException("GetErrorHRESULT"); }
-        private uint GetErrorMessage(char* buffer, uint bufferLength)
+        private uint GetErrorMessage(short* buffer, uint bufferLength)
         { throw new NotImplementedException("GetErrorMessage"); }
 
         private int FilterException(_EXCEPTION_POINTERS* pExceptionPointers)
@@ -2225,7 +2217,7 @@ namespace Internal.JitInterface
             pEEInfoOut.osType = _compilation.NodeFactory.Target.IsWindows ? CORINFO_OS.CORINFO_WINNT : CORINFO_OS.CORINFO_UNIX;
         }
 
-        private char* getJitTimeLogFilename()
+        private string getJitTimeLogFilename()
         {
             return null;
         }

@@ -1086,10 +1086,6 @@ public:
     void dmpIsValidStringRef(DLD key, DWORD value);
     BOOL repIsValidStringRef(CORINFO_MODULE_HANDLE module, unsigned metaTOK);
 
-    void recGetStringLiteral(CORINFO_MODULE_HANDLE module, unsigned metaTOK, int length, LPCWSTR result);
-    void dmpGetStringLiteral(DLD key, DD value);
-    LPCWSTR repGetStringLiteral(CORINFO_MODULE_HANDLE module, unsigned metaTOK, int* length);
-
     void recGetHelperName(CorInfoHelpFunc funcNum, const char* result);
     void dmpGetHelperName(DWORD key, DWORD value);
     const char* repGetHelperName(CorInfoHelpFunc funcNum);
@@ -1356,7 +1352,7 @@ private:
 };
 
 // ********************* Please keep this up-to-date to ease adding more ***************
-// Highest packet number: 175
+// Highest packet number: 174
 // *************************************************************************************
 enum mcPackets
 {
@@ -1497,7 +1493,6 @@ enum mcPackets
     Packet_IsSDArray                                     = 101,
     Packet_IsStructRequiringStackAllocRetBuf             = 102,
     Packet_IsValidStringRef                              = 103,
-    Packet_GetStringLiteral                              = 175, // Added 1/7/2020
     Retired6                                             = 104,
     Packet_IsValidToken                                  = 144, // Added 7/19/2013 - adjusted members to proper types
     Packet_IsValueClass                                  = 105,

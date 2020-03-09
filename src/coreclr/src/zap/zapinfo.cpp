@@ -3843,13 +3843,6 @@ BOOL ZapInfo::isValidStringRef (
     return m_pEEJitInfo->isValidStringRef(tokenScope, token);
 }
 
-LPCWSTR ZapInfo::getStringLiteral (
-            CORINFO_MODULE_HANDLE       tokenScope,
-            unsigned                    token,
-            int*                        length)
-{
-    return m_pEEJitInfo->getStringLiteral(tokenScope, token, length);
-}
 
 //
 // ICorMethodInfo
