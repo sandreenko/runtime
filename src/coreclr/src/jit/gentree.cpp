@@ -15019,25 +15019,6 @@ GenTree* Compiler::gtNewTempAssign(
             // and call returns. Lowering and Codegen will handle these.
             ok = true;
         }
-        else
-        {
-            assert(compNoReturnRetyping());
-            assert(!varTypeIsStruct(dstTyp));
-            unsigned dstSize = genTypeSize(dstTyp);
-
-            unsigned srcSize = genTypeSize(valTyp);
-            if (srcSize == 0)
-            {
-                assert(val->IsCall());
-                CORINFO_CLASS_HANDLE structHnd = val->AsCall()->gtRetClsHnd;
-                srcSize                        = info.compCompHnd->getClassSize(structHnd);
-            }
-            if (dstSize == srcSize)
-            {
-                // check that one of them is SIMD and another struct, find examples.
-                ok = true;
-            }
-        }
 
         if (!ok)
         {
@@ -17139,16 +17120,6 @@ CORINFO_CLASS_HANDLE Compiler::gtGetStructHandleIfPresent(GenTree* tree)
         // TODO seandree: add a check that `structHnd != NO_CLASS_HANDLE`,
         // today it won't work because the right part of an ASG could have struct type without a handle
         // (check `fgMorphBlockOperand(isBlkReqd`) and a few other cases.
-    }
-    else if (tree->OperIs(GT_LCL_VAR))
-    {
-        LclVarDsc* varDsc = lvaGetDesc(tree->AsLclVarCommon());
-        // LCL_VAR could be retyped into byref by "Replacing address of implicit by ref struct parameter with byref".
-        // but it will still have a struct handle.
-        // TODO seandree: get rid of this case or expand the explanation
-        // TODO seandree: I can't remember what was the case that needed that condition,
-        // try to delete that.
-        structHnd = varDsc->lvVerTypeInfo.GetClassHandle();
     }
     return structHnd;
 }
