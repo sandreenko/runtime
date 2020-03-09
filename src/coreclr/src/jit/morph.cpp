@@ -5029,7 +5029,7 @@ void Compiler::fgAddSkippedRegsInPromotedStructArg(LclVarDsc* varDsc,
 //
 void Compiler::fgFixupStructReturn(GenTree* callNode)
 {
-    if (compNoReturnRetyping())
+    if (!compAllowReturnRetyping())
     {
         return;
     }
@@ -5911,7 +5911,7 @@ GenTree* Compiler::fgMorphField(GenTree* tree, MorphAddrContext* mac)
 
     if (tree->AsField()->gtFldMayOverlap)
     {
-        if (!compNoReturnRetyping())
+        if (!compAllowReturnRetyping())
         {
             // If we don't do retyping, than we need the real struct handler in all cases.
             noHndIfOverlap = true;
@@ -7392,7 +7392,7 @@ GenTree* Compiler::fgMorphPotentialTailCall(GenTreeCall* call)
         {
             // This is a register-returned struct. Return a 0.
             // The actual return registers are hacked in lower and the register allocator.
-            assert(compNoReturnRetyping());
+            assert(compAllowReturnRetyping());
             nodeTy = TYP_INT;
         }
         result = gtNewZeroConNode(genActualType(nodeTy));
@@ -9626,7 +9626,7 @@ GenTree* Compiler::fgMorphBlockOperand(GenTree* tree, var_types asgType, unsigne
         else if (effectiveVal->TypeGet() != asgType)
         {
 #if !FEATURE_MULTIREG_RET
-            if (compNoReturnRetyping())
+            if (!compAllowReturnRetyping())
             {
                 // TODO seandree: see if we can get rid of these cases or add a cast node.
                 bool canTakeAddr = !effectiveVal->IsCall() && !effectiveVal->OperIsSIMD();
@@ -11353,7 +11353,7 @@ GenTree* Compiler::fgMorphSmpOp(GenTree* tree, MorphAddrContext* mac)
             }
             if (tree->TypeIs(TYP_STRUCT) && op1->OperIs(GT_OBJ, GT_BLK))
             {
-                assert(compNoReturnRetyping());
+                assert(!compAllowReturnRetyping());
                 GenTree* addr = op1->AsBlk()->Addr();
                 // if we return `OBJ` or `BLK` from a local var, lcl var has to have a stack address.
                 // lclmorph won't mark it with `lvaSetVarDoNotEnregister` because it was previously done

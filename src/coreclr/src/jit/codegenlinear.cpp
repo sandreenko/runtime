@@ -1212,7 +1212,7 @@ void CodeGen::genCopyRegIfNeeded(GenTree* node, regNumber needReg)
         var_types varType = node->TypeGet();
         if (varType == TYP_STRUCT)
         {
-            assert(compiler->compNoReturnRetyping());
+            assert(!compiler->compAllowReturnRetyping());
             assert(node->OperIs(GT_BITCAST));
             varType = node->AsUnOp()->gtOp1->TypeGet();
             assert(varType != TYP_STRUCT);
@@ -1774,7 +1774,7 @@ void CodeGen::genConsumeBlockSrc(GenTreeBlk* blkNode)
         }
         else
         {
-            assert(compiler->compNoReturnRetyping());
+            assert(!compiler->compAllowReturnRetyping());
             assert(src->OperIs(GT_BITCAST));
         }
     }
@@ -1819,7 +1819,7 @@ void CodeGen::genSetBlockSrc(GenTreeBlk* blkNode, regNumber srcReg)
         }
         else
         {
-            assert(compiler->compNoReturnRetyping());
+            assert(!compiler->compAllowReturnRetyping());
             assert(src->OperIs(GT_BITCAST));
         }
     }

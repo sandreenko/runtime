@@ -17011,7 +17011,7 @@ CORINFO_CLASS_HANDLE Compiler::gtGetStructHandleIfPresent(GenTree* tree)
             default:
                 break;
             case GT_BITCAST:
-                assert(compNoReturnRetyping());
+                assert(!compAllowReturnRetyping());
                 structHnd = gtGetStructHandleIfPresent(tree->AsUnOp()->gtOp1);
                 break;
             case GT_MKREFANY:

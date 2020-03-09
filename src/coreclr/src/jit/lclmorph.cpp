@@ -533,7 +533,7 @@ public:
                         LclVarDsc* varDsc = m_compiler->lvaGetDesc(lclNum);
                         if (varDsc->lvPromotedStruct() && (varDsc->lvFieldCnt != 1))
                         {
-                            assert(m_compiler->compNoReturnRetyping() || varDsc->lvDoNotEnregister);
+                            assert(!m_compiler->compAllowReturnRetyping() || varDsc->lvDoNotEnregister);
                             // Its fields were accessed, so do not enregister it.
                             // TODO seandree: it is possible to enregister that if we add a gather operation in codegen.
                             // like struct s { bool a -> rax, bool b -> rdx, bool c -> rcx } -> rax,

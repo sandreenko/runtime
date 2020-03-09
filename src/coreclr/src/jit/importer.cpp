@@ -1204,7 +1204,7 @@ GenTree* Compiler::impAssignStructPtr(GenTree*             destAddr,
 
             var_types returnType = (var_types)src->AsCall()->gtReturnType;
 
-            if (!compNoReturnRetyping())
+            if (compAllowReturnRetyping())
             {
                 // We won't use a return buffer, so change the type of src->gtType to 'returnType'
                 src->gtType = genActualType(returnType);
@@ -1289,16 +1289,16 @@ GenTree* Compiler::impAssignStructPtr(GenTree*             destAddr,
         {
             // Case of inline method returning a struct in one or more registers.
             // We won't need a return buffer
-            if (compNoReturnRetyping())
-            {
-                asgType = src->gtType;
-            }
-            else
+            if (compAllowReturnRetyping())
             {
                 var_types returnType = (var_types)call->gtReturnType;
                 asgType              = returnType;
                 src->gtType          = genActualType(returnType);
                 call->gtType         = src->gtType;
+            }
+            else
+            {
+                asgType = src->gtType;
             }
 
             // !!! The destination could be on stack. !!!
@@ -9097,7 +9097,7 @@ GenTree* Compiler::impFixupCallStructReturn(GenTreeCall* call, CORINFO_CLASS_HAN
     }
     else
     {
-        if (compNoReturnRetyping())
+        if (!compAllowReturnRetyping())
         {
             return call;
         }
@@ -9168,7 +9168,7 @@ GenTree* Compiler::impFixupStructReturnType(GenTree* op, CORINFO_CLASS_HANDLE re
     assert(varTypeIsStruct(info.compRetType));
     assert(info.compRetBuffArg == BAD_VAR_NUM);
 
-    if (compNoReturnRetyping() && (!op->IsCall() || !op->AsCall()->TreatAsHasRetBufArg(this)))
+    if (!compAllowReturnRetyping() && (!op->IsCall() || !op->AsCall()->TreatAsHasRetBufArg(this)))
     {
         // TODO: deal with these 2 special JIT intrinsics that don't have return buffer, but act like they do.
         return op;
@@ -15217,7 +15217,7 @@ void Compiler::impImportBlockCode(BasicBlock* block)
 
                     // The handle struct is returned in register
                     op1->AsCall()->gtReturnType = GetRuntimeHandleUnderlyingType();
-                    if (compNoReturnRetyping())
+                    if (!compAllowReturnRetyping())
                     {
                         op1->AsCall()->gtRetClsHnd = classHandle;
                     }
@@ -15261,7 +15261,7 @@ void Compiler::impImportBlockCode(BasicBlock* block)
 
                 // The handle struct is returned in register
                 op1->AsCall()->gtReturnType = GetRuntimeHandleUnderlyingType();
-                if (compNoReturnRetyping())
+                if (!compAllowReturnRetyping())
                 {
                     op1->AsCall()->gtRetClsHnd = tokenType;
                 }
@@ -15441,7 +15441,7 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                     op1 = gtNewHelperCallNode(helper,
                                               (var_types)((helper == CORINFO_HELP_UNBOX) ? TYP_BYREF : TYP_STRUCT),
                                               gtNewCallArgs(op2, op1));
-                    if (compNoReturnRetyping())
+                    if (!compAllowReturnRetyping())
                     {
                         if (op1->gtType == TYP_STRUCT)
                         {
@@ -16629,7 +16629,7 @@ bool Compiler::impReturnInstruction(int prefixFlags, OPCODE& opcode)
                     // node type. During morphing, the GT_CALL will get the correct, final, native return type.
 
                     bool restoreType = false;
-                    if (!compNoReturnRetyping())
+                    if (compAllowReturnRetyping())
                     {
 
                         if ((op2->OperGet() == GT_CALL) && (info.compRetType == TYP_STRUCT))
@@ -16645,7 +16645,7 @@ bool Compiler::impReturnInstruction(int prefixFlags, OPCODE& opcode)
 
                     GenTree* tmpOp2 = gtNewLclvNode(lvaInlineeReturnSpillTemp, op2->TypeGet());
 
-                    if (!compNoReturnRetyping())
+                    if (compAllowReturnRetyping())
                     {
                         if (restoreType)
                         {
@@ -16878,13 +16878,13 @@ bool Compiler::impReturnInstruction(int prefixFlags, OPCODE& opcode)
         op2 = impFixupStructReturnType(op2, retClsHnd);
         // return op2
         var_types returnType;
-        if (compNoReturnRetyping())
+        if (compAllowReturnRetyping())
         {
-            returnType = info.compRetType;
+            returnType = info.compRetNativeType;
         }
         else
         {
-            returnType = info.compRetNativeType;
+            returnType = info.compRetType;
         }
         op1 = gtNewOperNode(GT_RETURN, genActualType(returnType), op2);
     }

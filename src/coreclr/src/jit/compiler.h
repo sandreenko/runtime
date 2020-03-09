@@ -8973,9 +8973,9 @@ public:
 #endif // !TARGET_AMD64
     }
 
-    bool compNoReturnRetyping()
+    bool compAllowReturnRetyping()
     {
-        return JitConfig.JitNoStructRetyping();
+        return JitConfig.JitAllowStructRetyping();
     }
 
     // Returns true if the method returns a value in more than one return register

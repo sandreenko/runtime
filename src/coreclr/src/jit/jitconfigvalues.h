@@ -434,7 +434,8 @@ CONFIG_INTEGER(JitSaveFpLrWithCalleeSavedRegisters, W("JitSaveFpLrWithCalleeSave
 #endif // defined(TARGET_ARM64)
 #endif // DEBUG
 
-CONFIG_INTEGER(JitNoStructRetyping, W("JitNoStructRetyping"), 0) // Do not retype structs as primitive types.
+CONFIG_INTEGER(JitAllowStructRetyping, W("JitAllowStructRetyping"), 1) // Allow Jit to retype structs as primitive types
+                                                                       // when possible.
 
 #undef CONFIG_INTEGER
 #undef CONFIG_STRING

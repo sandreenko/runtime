@@ -1373,7 +1373,7 @@ int LinearScan::BuildBlockStore(GenTreeBlk* blkNode)
             }
             else
             {
-                assert(compiler->compNoReturnRetyping());
+                assert(!compiler->compAllowReturnRetyping());
                 assert(src->OperIs(GT_BITCAST) && src->AsUnOp()->gtGetOp1()->IsCall());
                 // It could only happen if we the source was a struct call,
                 // we don't have a source address, we just need to generate one move.
@@ -2792,7 +2792,7 @@ int LinearScan::BuildIndir(GenTreeIndir* indirTree)
     if (indirTree->TypeGet() == TYP_STRUCT)
     {
         // Should not see this with retyping.
-        assert(compiler->compNoReturnRetyping());
+        assert(!compiler->compAllowReturnRetyping());
     }
 
 #ifdef FEATURE_SIMD

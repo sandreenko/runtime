@@ -1084,7 +1084,7 @@ private:
             }
             else
             {
-                assert(compiler->compNoReturnRetyping());
+                assert(!compiler->compAllowReturnRetyping());
                 assert(tree->OperIs(GT_BITCAST));
                 type = tree->AsUnOp()->gtGetOp1()->gtType;
                 assert(!varTypeIsStruct(type));

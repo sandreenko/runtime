@@ -3266,7 +3266,7 @@ void CodeGen::genCodeForCpBlkUnroll(GenTreeBlk* node)
     }
     else
     {
-        assert(compiler->compNoReturnRetyping());
+        assert(!compiler->compAllowReturnRetyping());
         assert(src->OperIs(GT_BITCAST));
         // TODO seandree: Check that in `size < REGSIZE_BYTES` case we do extensions etc.
         assert(size <= REGSIZE_BYTES);
@@ -3691,7 +3691,7 @@ void CodeGen::genCodeForCpObj(GenTreeObj* cpObjNode)
         }
         else
         {
-            assert(compiler->compNoReturnRetyping());
+            assert(!compiler->compAllowReturnRetyping());
             assert(source->OperIs(GT_BITCAST));
             // TODO seandree: Check that in `size < REGSIZE_BYTES` case we do extensions etc.
             unsigned size = cpObjNode->GetLayout()->GetSize();
@@ -4729,7 +4729,7 @@ void CodeGen::genCodeForStoreLclVar(GenTreeLclVar* tree)
             }
             else
             {
-                assert(compiler->compNoReturnRetyping());
+                assert(!compiler->compAllowReturnRetyping());
                 assert(op1->OperIs(GT_BITCAST));
                 // That is an agly case where we import:
                 // [000153] -AC---------              *  ASG       struct (copy)
@@ -7574,7 +7574,7 @@ void CodeGen::genBitCast(var_types targetType, regNumber targetReg, var_types sr
         }
         else
         {
-            assert(compiler->compNoReturnRetyping());
+            assert(!compiler->compAllowReturnRetyping());
             // `op1` was already retyped to a native type (that is why we have a bitcast.
             // so we can use its type to get the size).
             nativeType = srcType;

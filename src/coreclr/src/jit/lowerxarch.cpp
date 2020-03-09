@@ -325,7 +325,7 @@ void Lowering::LowerBlockStore(GenTreeBlk* blkNode)
         }
         else
         {
-            assert(comp->compNoReturnRetyping());
+            assert(!comp->compAllowReturnRetyping());
             assert(src->OperIs(GT_BITCAST));
             assert(varTypeIsStruct(src));
             if (blkNode->OperIs(GT_STORE_OBJ) && !blkNode->AsObj()->GetLayout()->HasGCPtr())

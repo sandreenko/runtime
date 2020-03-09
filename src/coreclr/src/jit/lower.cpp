@@ -1696,7 +1696,7 @@ void Lowering::LowerCall(GenTree* node)
 #if !FEATURE_MULTIREG_RET
     if (varTypeIsStruct(call))
     {
-        assert(comp->compNoReturnRetyping());
+        assert(!comp->compAllowReturnRetyping());
         CORINFO_CLASS_HANDLE        retClsHnd = call->gtRetClsHnd;
         Compiler::structPassingKind howToReturnStruct;
         var_types                   returnType = comp->getReturnTypeForStruct(retClsHnd, &howToReturnStruct);
@@ -3213,7 +3213,7 @@ void Lowering::LowerRet(GenTreeUnOp* ret)
 #endif
         if (varTypeIsStruct(ret))
         {
-            assert(comp->compNoReturnRetyping());
+            assert(!comp->compAllowReturnRetyping());
             GenTree*  retVal           = ret->gtGetOp1();
             var_types nativeReturnType = genActualType(comp->info.compRetNativeType);
 
