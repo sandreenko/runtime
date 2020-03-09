@@ -2196,6 +2196,7 @@ void Compiler::compSetProcessor()
 #ifdef TARGET_XARCH
     opts.compSupportsISA = 0;
 
+#ifdef FEATURE_CORECLR
     if (JitConfig.EnableHWIntrinsic())
     {
         // Dummy ISAs for simplifying the JIT code
@@ -2307,6 +2308,32 @@ void Compiler::compSetProcessor()
         opts.setSupportedISA(InstructionSet_BMI2_X64);
 #endif // TARGET_AMD64
     }
+#else  // !FEATURE_CORECLR
+    if (!jitFlags.IsSet(JitFlags::JIT_FLAG_PREJIT))
+    {
+        // If this is not FEATURE_CORECLR, the only flags supported by the VM are AVX and AVX2.
+        // Furthermore, the only two configurations supported by the desktop JIT are SSE2 and AVX2,
+        // so if the latter is set, we also check all the in-between options.
+        // Note that the EnableSSE2 and EnableSSE flags are only checked by HW Intrinsic code,
+        // so the System.Numerics.Vector support doesn't depend on those flags.
+        // However, if any of these are disabled, we will not enable AVX2.
+        //
+        if (jitFlags.IsSet(JitFlags::JIT_FLAG_USE_AVX) && jitFlags.IsSet(JitFlags::JIT_FLAG_USE_AVX2) &&
+            (JitConfig.EnableAVX2() != 0) && (JitConfig.EnableAVX() != 0) && (JitConfig.EnableSSE42() != 0) &&
+            (JitConfig.EnableSSE41() != 0) && (JitConfig.EnableSSSE3() != 0) && (JitConfig.EnableSSE3() != 0) &&
+            (JitConfig.EnableSSE2() != 0) && (JitConfig.EnableSSE() != 0) && (JitConfig.EnableSSE3_4() != 0))
+        {
+            opts.setSupportedISA(InstructionSet_SSE);
+            opts.setSupportedISA(InstructionSet_SSE2);
+            opts.setSupportedISA(InstructionSet_SSE3);
+            opts.setSupportedISA(InstructionSet_SSSE3);
+            opts.setSupportedISA(InstructionSet_SSE41);
+            opts.setSupportedISA(InstructionSet_SSE42);
+            opts.setSupportedISA(InstructionSet_AVX);
+            opts.setSupportedISA(InstructionSet_AVX2);
+        }
+    }
+#endif // !FEATURE_CORECLR
 
     if (!compIsForInlining())
     {
@@ -2455,6 +2482,11 @@ void DummyProfilerELTStub(UINT_PTR ProfilerHandle)
 
 #endif // PROFILING_SUPPORTED
 
+bool Compiler::compIsFullTrust()
+{
+    return (info.compCompHnd->canSkipMethodVerification(info.compMethodHnd) == CORINFO_VERIFICATION_CAN_SKIP);
+}
+
 bool Compiler::compShouldThrowOnNoway(
 #ifdef FEATURE_TRACELOGGING
     const char* filename, unsigned line
@@ -2468,7 +2500,8 @@ bool Compiler::compShouldThrowOnNoway(
     // In min opts, we don't want the noway assert to go through the exception
     // path. Instead we want it to just silently go through codegen for
     // compat reasons.
-    return !opts.MinOpts();
+    // If we are not in full trust, we should always fire for security.
+    return !opts.MinOpts() || !compIsFullTrust();
 }
 
 // ConfigInteger does not offer an option for decimal flags.  Any numbers are interpreted as hex.
@@ -2513,6 +2546,8 @@ void Compiler::compInitOptions(JitFlags* jitFlags)
         assert(!jitFlags->IsSet(JitFlags::JIT_FLAG_PROF_ENTERLEAVE));
         assert(!jitFlags->IsSet(JitFlags::JIT_FLAG_DEBUG_EnC));
         assert(!jitFlags->IsSet(JitFlags::JIT_FLAG_DEBUG_INFO));
+
+        assert(jitFlags->IsSet(JitFlags::JIT_FLAG_SKIP_VERIFICATION));
     }
 
     opts.jitFlags  = jitFlags;
@@ -2583,7 +2618,8 @@ void Compiler::compInitOptions(JitFlags* jitFlags)
     opts.dspDiffable = compIsForInlining() ? impInlineInfo->InlinerCompiler->opts.dspDiffable : false;
 #endif
 
-    opts.altJit = false;
+    opts.compNeedSecurityCheck = false;
+    opts.altJit                = false;
 
 #if defined(LATE_DISASM) && !defined(DEBUG)
     // For non-debug builds with the late disassembler built in, we currently always do late disassembly
@@ -3849,6 +3885,8 @@ _SetMinOpts:
         }
     }
 
+    info.compUnwrapContextful = opts.OptimizationEnabled();
+
     fgCanRelocateEHRegions = true;
 }
 
@@ -4357,6 +4395,11 @@ void Compiler::compCompile(void** methodCodePtr, ULONG* methodCodeSize, JitFlags
     if (opts.compDbgEnC)
     {
         codeGen->setFramePointerRequired(true);
+
+        // Since we need a slots for security near ebp, its not possible
+        // to do this after an Edit without shifting all the locals.
+        // So we just always reserve space for these slots in case an Edit adds them
+        opts.compNeedSecurityCheck = true;
 
         // We don't care about localloc right now. If we do support it,
         // EECodeManager::FixContextForEnC() needs to handle it smartly
@@ -5339,10 +5382,65 @@ int Compiler::compCompile(CORINFO_METHOD_HANDLE methodHnd,
 
     // Set this before the first 'BADCODE'
     // Skip verification where possible
-    //.tiVerificationNeeded = !compileFlags->IsSet(JitFlags::JIT_FLAG_SKIP_VERIFICATION);
-    assert(compileFlags->IsSet(JitFlags::JIT_FLAG_SKIP_VERIFICATION));
+    tiVerificationNeeded = !compileFlags->IsSet(JitFlags::JIT_FLAG_SKIP_VERIFICATION);
 
     assert(!compIsForInlining() || !tiVerificationNeeded); // Inlinees must have been verified.
+
+    // assume the code is verifiable unless proven otherwise
+    tiIsVerifiableCode = TRUE;
+
+    tiRuntimeCalloutNeeded = false;
+
+    CorInfoInstantiationVerification instVerInfo = INSTVER_GENERIC_PASSED_VERIFICATION;
+
+    if (!compIsForInlining() && tiVerificationNeeded)
+    {
+        instVerInfo = compHnd->isInstantiationOfVerifiedGeneric(methodHnd);
+
+        if (tiVerificationNeeded && (instVerInfo == INSTVER_GENERIC_FAILED_VERIFICATION))
+        {
+            CorInfoCanSkipVerificationResult canSkipVerificationResult =
+                info.compCompHnd->canSkipMethodVerification(info.compMethodHnd);
+
+            switch (canSkipVerificationResult)
+            {
+                case CORINFO_VERIFICATION_CANNOT_SKIP:
+                    // We cannot verify concrete instantiation.
+                    // We can only verify the typical/open instantiation
+                    // The VM should throw a VerificationException instead of allowing this.
+                    NO_WAY("Verification of closed instantiations is not supported");
+                    break;
+
+                case CORINFO_VERIFICATION_CAN_SKIP:
+                    // The VM should first verify the open instantiation. If unverifiable code
+                    // is detected, it should pass in JitFlags::JIT_FLAG_SKIP_VERIFICATION.
+                    assert(!"The VM should have used JitFlags::JIT_FLAG_SKIP_VERIFICATION");
+                    tiVerificationNeeded = false;
+                    break;
+
+                case CORINFO_VERIFICATION_RUNTIME_CHECK:
+                    // This is a concrete generic instantiation with unverifiable code, that also
+                    // needs a runtime callout.
+                    tiVerificationNeeded   = false;
+                    tiRuntimeCalloutNeeded = true;
+                    break;
+
+                case CORINFO_VERIFICATION_DONT_JIT:
+                    // We cannot verify concrete instantiation.
+                    // We can only verify the typical/open instantiation
+                    // The VM should throw a VerificationException instead of allowing this.
+                    BADCODE("NGEN of unverifiable transparent code is not supported");
+                    break;
+            }
+        }
+
+        // load any constraints for verification, noting any cycles to be rejected by the verifying importer
+        if (tiVerificationNeeded)
+        {
+            compHnd->initConstraintsForVerification(methodHnd, &info.hasCircularClassConstraints,
+                                                    &info.hasCircularMethodConstraints);
+        }
+    }
 
     /* Setup an error trap */
 
@@ -5357,7 +5455,8 @@ int Compiler::compCompile(CORINFO_METHOD_HANDLE methodHnd,
         ULONG*                methodCodeSize;
         JitFlags*             compileFlags;
 
-        int result;
+        CorInfoInstantiationVerification instVerInfo;
+        int                              result;
     } param;
     param.pThis          = this;
     param.classPtr       = classPtr;
@@ -5366,13 +5465,14 @@ int Compiler::compCompile(CORINFO_METHOD_HANDLE methodHnd,
     param.methodCodePtr  = methodCodePtr;
     param.methodCodeSize = methodCodeSize;
     param.compileFlags   = compileFlags;
+    param.instVerInfo    = instVerInfo;
     param.result         = CORJIT_INTERNALERROR;
 
     setErrorTrap(compHnd, Param*, pParam, &param) // ERROR TRAP: Start normal block
     {
-        pParam->result =
-            pParam->pThis->compCompileHelper(pParam->classPtr, pParam->compHnd, pParam->methodInfo,
-                                             pParam->methodCodePtr, pParam->methodCodeSize, pParam->compileFlags);
+        pParam->result = pParam->pThis->compCompileHelper(pParam->classPtr, pParam->compHnd, pParam->methodInfo,
+                                                          pParam->methodCodePtr, pParam->methodCodeSize,
+                                                          pParam->compileFlags, pParam->instVerInfo);
     }
     finallyErrorTrap() // ERROR TRAP: The following block handles errors
     {
@@ -5722,12 +5822,13 @@ unsigned getMethodBodyChecksum(__in_z char* code, int size)
 #endif
 }
 
-int Compiler::compCompileHelper(CORINFO_MODULE_HANDLE classPtr,
-                                COMP_HANDLE           compHnd,
-                                CORINFO_METHOD_INFO*  methodInfo,
-                                void**                methodCodePtr,
-                                ULONG*                methodCodeSize,
-                                JitFlags*             compileFlags)
+int Compiler::compCompileHelper(CORINFO_MODULE_HANDLE            classPtr,
+                                COMP_HANDLE                      compHnd,
+                                CORINFO_METHOD_INFO*             methodInfo,
+                                void**                           methodCodePtr,
+                                ULONG*                           methodCodeSize,
+                                JitFlags*                        compileFlags,
+                                CorInfoInstantiationVerification instVerInfo)
 {
     CORINFO_METHOD_HANDLE methodHnd = info.compMethodHnd;
 
@@ -5810,6 +5911,12 @@ int Compiler::compCompileHelper(CORINFO_MODULE_HANDLE classPtr,
                 eeGetMethodFullName(info.compMethodHnd), dspPtr(impTokenLookupContextHandle)));
     }
 
+    // Force verification if asked to do so
+    if (JitConfig.JitForceVer())
+    {
+        tiVerificationNeeded = (instVerInfo == INSTVER_NOT_INSTANTIATION);
+    }
+
     if (tiVerificationNeeded)
     {
         JITLOG((LL_INFO10000, "tiVerificationNeeded initially set to true for %s\n", info.compFullName));
@@ -5821,6 +5928,18 @@ int Compiler::compCompileHelper(CORINFO_MODULE_HANDLE classPtr,
        for reimporting, impCanReimport can be used to check for reimporting. */
 
     impCanReimport = (tiVerificationNeeded || compStressCompile(STRESS_CHK_REIMPORT, 15));
+
+    // Need security prolog/epilog callouts when there is a declarative security in the method.
+    tiSecurityCalloutNeeded = ((info.compFlags & CORINFO_FLG_NOSECURITYWRAP) == 0);
+
+    if (tiSecurityCalloutNeeded || (info.compFlags & CORINFO_FLG_SECURITYCHECK))
+    {
+        // We need to allocate the security object on the stack
+        // when the method being compiled has a declarative security
+        // (i.e. when CORINFO_FLG_NOSECURITYWRAP is reset for the current method).
+        // This is also the case when we inject a prolog and epilog in the method.
+        opts.compNeedSecurityCheck = true;
+    }
 
     /* Initialize set a bunch of global values */
 
@@ -5855,6 +5974,8 @@ int Compiler::compCompileHelper(CORINFO_MODULE_HANDLE classPtr,
     }
 
     info.compIsStatic = (info.compFlags & CORINFO_FLG_STATIC) != 0;
+
+    info.compIsContextful = (info.compClassAttr & CORINFO_FLG_CONTEXTFUL) != 0;
 
     info.compPublishStubParam = opts.jitFlags->IsSet(JitFlags::JIT_FLAG_PUBLISH_SECRET_PARAM);
 
@@ -5968,7 +6089,12 @@ int Compiler::compCompileHelper(CORINFO_MODULE_HANDLE classPtr,
         goto _Next;
     }
 
+#ifdef FEATURE_CORECLR
     if (compHasBackwardJump && (info.compFlags & CORINFO_FLG_DISABLE_TIER0_FOR_LOOPS) != 0 && fgCanSwitchToOptimized())
+#else // !FEATURE_CORECLR
+    // We may want to use JitConfig value here to support DISABLE_TIER0_FOR_LOOPS
+    if (compHasBackwardJump && fgCanSwitchToOptimized())
+#endif
     {
         // Method likely has a loop, switch to the OptimizedTier to avoid spending too much time running slower code
         fgSwitchToOptimized();

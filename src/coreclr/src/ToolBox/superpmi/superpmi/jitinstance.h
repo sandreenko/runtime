@@ -20,6 +20,7 @@ private:
     HMODULE        hLib;
     PgetJit        pngetJit;
     PjitStartup    pnjitStartup;
+    PsxsJitStartup pnsxsJitStartup;
     ICorJitHost*   jitHost;
     ICorJitInfo*   icji;
     SimpleTimer    stj;
@@ -67,8 +68,8 @@ public:
 
     const MethodContext::Environment& getEnvironment();
 
-    void* allocateArray(size_t size);
-    void* allocateLongLivedArray(size_t size);
+    void* allocateArray(ULONG size);
+    void* allocateLongLivedArray(ULONG size);
     void freeArray(void* array);
     void freeLongLivedArray(void* array);
 };

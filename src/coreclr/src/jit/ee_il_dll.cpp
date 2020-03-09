@@ -179,6 +179,15 @@ HINSTANCE GetModuleInst()
     return (g_hInst);
 }
 
+#ifndef FEATURE_CORECLR
+extern "C" DLLEXPORT void __stdcall sxsJitStartup(CoreClrCallbacks const& cccallbacks)
+{
+#ifndef SELF_NO_HOST
+    InitUtilcode(cccallbacks);
+#endif
+}
+#endif // FEATURE_CORECLR
+
 #endif // !FEATURE_MERGE_JIT_AND_ENGINE
 
 /*****************************************************************************/
@@ -194,6 +203,8 @@ void* __cdecl operator new(size_t, const CILJitSingletonAllocator&)
     static char CILJitBuff[sizeof(CILJit)];
     return CILJitBuff;
 }
+
+ICorJitCompiler* g_realJitCompiler = nullptr;
 
 DLLEXPORT ICorJitCompiler* __stdcall getJit()
 {
@@ -285,6 +296,11 @@ void JitTls::SetCompiler(Compiler* compiler)
 CorJitResult CILJit::compileMethod(
     ICorJitInfo* compHnd, CORINFO_METHOD_INFO* methodInfo, unsigned flags, BYTE** entryAddress, ULONG* nativeSizeOfCode)
 {
+    if (g_realJitCompiler != nullptr)
+    {
+        return g_realJitCompiler->compileMethod(compHnd, methodInfo, flags, entryAddress, nativeSizeOfCode);
+    }
+
     JitFlags jitFlags;
 
     assert(flags == CORJIT_FLAGS::CORJIT_FLAG_CALL_GETJITFLAGS);
@@ -312,8 +328,45 @@ CorJitResult CILJit::compileMethod(
     return CorJitResult(result);
 }
 
+/*****************************************************************************
+ * Notification from VM to clear any caches
+ */
+void CILJit::clearCache(void)
+{
+    if (g_realJitCompiler != nullptr)
+    {
+        g_realJitCompiler->clearCache();
+        // Continue...
+    }
+
+    return;
+}
+
+/*****************************************************************************
+ * Notify vm that we have something to clean up
+ */
+BOOL CILJit::isCacheCleanupRequired(void)
+{
+    if (g_realJitCompiler != nullptr)
+    {
+        if (g_realJitCompiler->isCacheCleanupRequired())
+        {
+            return TRUE;
+        }
+        // Continue...
+    }
+
+    return FALSE;
+}
+
 void CILJit::ProcessShutdownWork(ICorStaticInfo* statInfo)
 {
+    if (g_realJitCompiler != nullptr)
+    {
+        g_realJitCompiler->ProcessShutdownWork(statInfo);
+        // Continue, by shutting down this JIT as well.
+    }
+
     jitShutdown(false);
 
     Compiler::ProcessShutdownWork(statInfo);
@@ -324,6 +377,12 @@ void CILJit::ProcessShutdownWork(ICorStaticInfo* statInfo)
  */
 void CILJit::getVersionIdentifier(GUID* versionIdentifier)
 {
+    if (g_realJitCompiler != nullptr)
+    {
+        g_realJitCompiler->getVersionIdentifier(versionIdentifier);
+        return;
+    }
+
     assert(versionIdentifier != nullptr);
     memcpy(versionIdentifier, &JITEEVersionIdentifier, sizeof(GUID));
 }
@@ -334,6 +393,11 @@ void CILJit::getVersionIdentifier(GUID* versionIdentifier)
 
 unsigned CILJit::getMaxIntrinsicSIMDVectorLength(CORJIT_FLAGS cpuCompileFlags)
 {
+    if (g_realJitCompiler != nullptr)
+    {
+        return g_realJitCompiler->getMaxIntrinsicSIMDVectorLength(cpuCompileFlags);
+    }
+
     JitFlags jitFlags;
     jitFlags.SetFromFlags(cpuCompileFlags);
 
@@ -369,6 +433,11 @@ unsigned CILJit::getMaxIntrinsicSIMDVectorLength(CORJIT_FLAGS cpuCompileFlags)
     }
     return 0;
 #endif // !FEATURE_SIMD
+}
+
+void CILJit::setRealJit(ICorJitCompiler* realJitCompiler)
+{
+    g_realJitCompiler = realJitCompiler;
 }
 
 /*****************************************************************************
@@ -485,7 +554,7 @@ GenTree* Compiler::eeGetPInvokeCookie(CORINFO_SIG_INFO* szMetaSig)
 
 unsigned Compiler::eeGetArrayDataOffset(var_types type)
 {
-    return OFFSETOF__CORINFO_Array__data;
+    return varTypeIsGC(type) ? eeGetEEInfo()->offsetOfObjArrayData : OFFSETOF__CORINFO_Array__data;
 }
 
 //------------------------------------------------------------------------

@@ -7234,6 +7234,7 @@ BOOL Thread::HaveExtraWorkForFinalizer()
 
     return m_ThreadTasks
         || ThreadpoolMgr::HaveTimerInfosToFlush()
+        || ExecutionManager::IsCacheCleanupRequired()
         || Thread::CleanupNeededForFinalizedThread()
         || (m_DetachCount > 0)
         || SystemDomain::System()->RequireAppDomainCleanup()
@@ -7278,6 +7279,11 @@ void Thread::DoExtraWorkForFinalizer()
     if(m_DetachCount > 0 || Thread::CleanupNeededForFinalizedThread())
     {
         Thread::CleanupDetachedThreads();
+    }
+
+    if(ExecutionManager::IsCacheCleanupRequired() && GCHeapUtilities::GetGCHeap()->GetCondemnedGeneration()>=1)
+    {
+        ExecutionManager::ClearCaches();
     }
 
     // If there were any TimerInfos waiting to be released, they'll get flushed now

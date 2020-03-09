@@ -68,6 +68,7 @@ void Compiler::lvaInit()
     lvaVarargsBaseOfStkArgs = BAD_VAR_NUM;
 #endif // TARGET_X86
     lvaVarargsHandleArg = BAD_VAR_NUM;
+    lvaSecurityObject   = BAD_VAR_NUM;
     lvaStubArgumentVar  = BAD_VAR_NUM;
     lvaArg0Var          = BAD_VAR_NUM;
     lvaMonAcquired      = BAD_VAR_NUM;
@@ -5764,6 +5765,15 @@ void Compiler::lvaAssignVirtualFrameOffsetsToLocals()
         stkOffs = lvaAllocLocalAndSetVirtualOffset(lvaMonAcquired, lvaLclSize(lvaMonAcquired), stkOffs);
     }
 
+    if (opts.compNeedSecurityCheck)
+    {
+#ifdef JIT32_GCENCODER
+        /* This can't work without an explicit frame, so make sure */
+        noway_assert(codeGen->isFramePointerUsed());
+#endif
+        stkOffs = lvaAllocLocalAndSetVirtualOffset(lvaSecurityObject, TARGET_POINTER_SIZE, stkOffs);
+    }
+
 #ifdef JIT32_GCENCODER
     if (lvaLocAllocSPvar != BAD_VAR_NUM)
     {
@@ -5965,7 +5975,7 @@ void Compiler::lvaAssignVirtualFrameOffsetsToLocals()
 #ifdef JIT32_GCENCODER
                 lclNum == lvaLocAllocSPvar ||
 #endif // JIT32_GCENCODER
-                false)
+                lclNum == lvaSecurityObject)
             {
                 assert(varDsc->lvStkOffs != BAD_STK_OFFS);
                 continue;

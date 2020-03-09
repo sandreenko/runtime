@@ -621,6 +621,25 @@ size_t CEEInfo::findNameOfToken (
     return NameLen;
 }
 
+CorInfoCanSkipVerificationResult CEEInfo::canSkipMethodVerification(CORINFO_METHOD_HANDLE ftnHnd)
+{
+    CONTRACTL {
+        THROWS;
+        GC_TRIGGERS;
+        MODE_PREEMPTIVE;
+    } CONTRACTL_END;
+
+    return CORINFO_VERIFICATION_CAN_SKIP;
+}
+
+/*********************************************************************/
+BOOL CEEInfo::shouldEnforceCallvirtRestriction(
+        CORINFO_MODULE_HANDLE scopeHnd)
+{
+    LIMITED_METHOD_CONTRACT;
+    return TRUE;
+}
+
 #ifdef FEATURE_READYTORUN_COMPILER
 
 // Returns true if assemblies are in the same version bubble
@@ -693,6 +712,20 @@ static bool CallerAndCalleeInSystemVersionBubble(MethodDesc* pCaller, MethodDesc
 #endif
 
     return false;
+}
+
+
+/*********************************************************************/
+CorInfoCanSkipVerificationResult CEEInfo::canSkipVerification(
+        CORINFO_MODULE_HANDLE moduleHnd)
+{
+    CONTRACTL {
+        THROWS;
+        GC_TRIGGERS;
+        MODE_PREEMPTIVE;
+    } CONTRACTL_END;
+
+    return CORINFO_VERIFICATION_CAN_SKIP;
 }
 
 /*********************************************************************/
@@ -2418,7 +2451,7 @@ CorInfoType CEEInfo::asCorInfoType (CORINFO_CLASS_HANDLE clsHnd)
 }
 
 
-void CEEInfo::getLocationOfThisType(CORINFO_METHOD_HANDLE context, CORINFO_LOOKUP_KIND* pLookupKind)
+CORINFO_LOOKUP_KIND CEEInfo::getLocationOfThisType(CORINFO_METHOD_HANDLE context)
 {
     CONTRACTL {
         THROWS;
@@ -2426,9 +2459,11 @@ void CEEInfo::getLocationOfThisType(CORINFO_METHOD_HANDLE context, CORINFO_LOOKU
         MODE_PREEMPTIVE;
     } CONTRACTL_END;
 
+    CORINFO_LOOKUP_KIND result;
+
     /* Initialize fields of result for debug build warning */
-    pLookupKind->needsRuntimeLookup = false;
-    pLookupKind->runtimeLookupKind  = CORINFO_LOOKUP_THISOBJ;
+    result.needsRuntimeLookup = false;
+    result.runtimeLookupKind  = CORINFO_LOOKUP_THISOBJ;
 
     JIT_TO_EE_TRANSITION();
 
@@ -2437,31 +2472,33 @@ void CEEInfo::getLocationOfThisType(CORINFO_METHOD_HANDLE context, CORINFO_LOOKU
     // If the method table is not shared, then return CONST
     if (!pContextMD->GetMethodTable()->IsSharedByGenericInstantiations())
     {
-        pLookupKind->needsRuntimeLookup = false;
+        result.needsRuntimeLookup = false;
     }
     else
     {
-        pLookupKind->needsRuntimeLookup = true;
+        result.needsRuntimeLookup = true;
 
         // If we've got a vtable extra argument, go through that
         if (pContextMD->RequiresInstMethodTableArg())
         {
-            pLookupKind->runtimeLookupKind = CORINFO_LOOKUP_CLASSPARAM;
+            result.runtimeLookupKind = CORINFO_LOOKUP_CLASSPARAM;
         }
         // If we've got an object, go through its vtable
         else if (pContextMD->AcquiresInstMethodTableFromThis())
         {
-            pLookupKind->runtimeLookupKind = CORINFO_LOOKUP_THISOBJ;
+            result.runtimeLookupKind = CORINFO_LOOKUP_THISOBJ;
         }
         // Otherwise go through the method-desc argument
         else
         {
             _ASSERTE(pContextMD->RequiresInstMethodDescArg());
-            pLookupKind->runtimeLookupKind = CORINFO_LOOKUP_METHODPARAM;
+            result.runtimeLookupKind = CORINFO_LOOKUP_METHODPARAM;
         }
     }
 
     EE_TO_JIT_TRANSITION();
+
+    return result;
 }
 
 CORINFO_METHOD_HANDLE CEEInfo::GetDelegateCtor(
@@ -3746,6 +3783,17 @@ CorInfoInlineTypeCheck CEEInfo::canInlineTypeCheck(CORINFO_CLASS_HANDLE clsHnd, 
 {
     LIMITED_METHOD_CONTRACT;
     return CORINFO_INLINE_TYPECHECK_PASS;
+}
+
+/*********************************************************************/
+// If this method returns true, JIT will do optimization to inline the check for
+//     GetTypeFromHandle(handle) == obj.GetType()
+//
+// This will enable to use directly the typehandle instead of going through getClassByHandle
+BOOL CEEInfo::canInlineTypeCheckWithObjectVTable (CORINFO_CLASS_HANDLE clsHnd)
+{
+    LIMITED_METHOD_CONTRACT;
+    return TRUE;
 }
 
 /*********************************************************************/
@@ -6321,6 +6369,38 @@ CorInfoHelpFunc CEEInfo::getBoxHelper(CORINFO_CLASS_HANDLE clsHnd)
 }
 
 /***********************************************************************/
+CorInfoHelpFunc CEEInfo::getSecurityPrologHelper(CORINFO_METHOD_HANDLE ftn)
+{
+    CONTRACTL {
+        THROWS;
+        GC_TRIGGERS;
+        MODE_PREEMPTIVE;
+    } CONTRACTL_END;
+
+    CorInfoHelpFunc result = CORINFO_HELP_UNDEF;
+
+    JIT_TO_EE_TRANSITION();
+
+#ifdef FEATURE_NATIVE_IMAGE_GENERATION
+    // This will make sure that when IBC logging is on, we call the slow helper with IBC probe
+    if (IsCompilingForNGen() &&
+        GetAppDomain()->ToCompilationDomain()->m_fForceInstrument)
+    {
+        result = CORINFO_HELP_SECURITY_PROLOG_FRAMED;
+    }
+#endif // FEATURE_NATIVE_IMAGE_GENERATION
+
+    if (result == CORINFO_HELP_UNDEF)
+    {
+        result = CORINFO_HELP_SECURITY_PROLOG;
+    }
+
+    EE_TO_JIT_TRANSITION();
+
+    return result;
+}
+
+/***********************************************************************/
 // registers a vararg sig & returns a class-specific cookie for it.
 
 CORINFO_VARARGS_HANDLE CEEInfo::getVarArgsHandle(CORINFO_SIG_INFO *sig,
@@ -6597,10 +6677,10 @@ DWORD CEEInfo::getMethodAttribsInternal (CORINFO_METHOD_HANDLE ftn)
 
     if (pMD->IsLCGMethod())
     {
-        return CORINFO_FLG_STATIC | CORINFO_FLG_DONT_INLINE;
+        return CORINFO_FLG_STATIC | CORINFO_FLG_DONT_INLINE | CORINFO_FLG_NOSECURITYWRAP;
     }
 
-    DWORD result = 0;
+    DWORD result = CORINFO_FLG_NOSECURITYWRAP;
 
     DWORD attribs = pMD->GetAttrs();
 
@@ -8220,6 +8300,98 @@ void CEEInfo::reportInliningDecision (CORINFO_METHOD_HANDLE inlinerHnd,
 
 
 /*************************************************************
+This loads the (formal) declared constraints on the class and method type parameters,
+and detects (but does not itself reject) circularities among the class type parameters
+and (separately) method type parameters.
+
+It must be called whenever we verify a typical method, ie any method (generic or
+nongeneric) in a typical class. It must be called for non-generic methods too,
+because their bodies may still mention class type parameters which will need to
+have their formal constraints loaded in order to perform type compatibility tests.
+
+We have to rule out cycles like "C<U,T> where T:U, U:T" only to avoid looping
+in the verifier (ie the T.CanCast(A) would loop calling U.CanCast(A) then
+T.CanCastTo(A) etc.). Since the JIT only tries to walk the hierarchy from a type
+a parameter when verifying, it should be safe to JIT unverified, but trusted,
+instantiations even in the presence of cycle constraints.
+@TODO: It should be possible (and easy) to detect cycles much earlier on by
+directly inspecting the metadata. All you have to do is check that, for each
+of the n type parameters to a class or method there is no path of length n
+obtained by following naked type parameter constraints of the same kind.
+This can be detected by looking directly at metadata, without actually loading
+the typehandles for the naked type parameters.
+ *************************************************************/
+
+void CEEInfo::initConstraintsForVerification(CORINFO_METHOD_HANDLE hMethod,
+                                             BOOL *pfHasCircularClassConstraints,
+                                             BOOL *pfHasCircularMethodConstraints)
+{
+    CONTRACTL {
+        THROWS;
+        GC_TRIGGERS;
+        MODE_PREEMPTIVE;
+        PRECONDITION(CheckPointer(pfHasCircularClassConstraints));
+        PRECONDITION(CheckPointer(pfHasCircularMethodConstraints));
+    } CONTRACTL_END;
+
+    *pfHasCircularClassConstraints  = FALSE;
+    *pfHasCircularMethodConstraints = FALSE;
+
+    JIT_TO_EE_TRANSITION();
+
+    MethodDesc* pMethod = GetMethod(hMethod);
+    if (pMethod->IsTypicalMethodDefinition())
+    {
+        // Force a load of the constraints on the type parameters, detecting cyclic bounds
+        pMethod->LoadConstraintsForTypicalMethodDefinition(pfHasCircularClassConstraints,pfHasCircularMethodConstraints);
+    }
+
+    EE_TO_JIT_TRANSITION();
+}
+
+/*************************************************************
+ * Check if a method to be compiled is an instantiation
+ * of generic code that has already been verified.
+ * Three possible return values (see corinfo.h)
+ *************************************************************/
+
+CorInfoInstantiationVerification
+    CEEInfo::isInstantiationOfVerifiedGeneric(CORINFO_METHOD_HANDLE hMethod)
+{
+    CONTRACTL {
+        THROWS;
+        GC_TRIGGERS;
+        MODE_PREEMPTIVE;
+    } CONTRACTL_END;
+
+    CorInfoInstantiationVerification result = INSTVER_NOT_INSTANTIATION;
+
+    JIT_TO_EE_TRANSITION();
+
+    MethodDesc * pMethod = GetMethod(hMethod);
+
+    if (!(pMethod->HasClassOrMethodInstantiation()))
+    {
+        result = INSTVER_NOT_INSTANTIATION;
+        goto exit;
+    }
+
+    if (pMethod->IsTypicalMethodDefinition())
+    {
+        result = INSTVER_NOT_INSTANTIATION;
+        goto exit;
+    }
+
+    result = INSTVER_GENERIC_PASSED_VERIFICATION;
+
+ exit: ;
+
+    EE_TO_JIT_TRANSITION();
+
+    return result;
+}
+
+/*************************************************************
  * Similar to above, but perform check for tail call
  * eligibility. The callee can be passed as NULL if not known
  * (calli and callvirt).
@@ -9376,6 +9548,41 @@ unsigned CEEInfo::getFieldOffset (CORINFO_FIELD_HANDLE fieldHnd)
 }
 
 /*********************************************************************/
+bool CEEInfo::isWriteBarrierHelperRequired(CORINFO_FIELD_HANDLE field)
+{
+    CONTRACTL {
+        THROWS;
+        GC_TRIGGERS;
+        MODE_PREEMPTIVE;
+    } CONTRACTL_END;
+
+    bool fHelperRequired = false;
+
+    JIT_TO_EE_TRANSITION();
+
+    FieldDesc * pField = (FieldDesc *)field;
+
+    // TODO: jit64 should be switched to the same plan as the i386 jits - use
+    // getClassGClayout to figure out the need for writebarrier helper, and inline the copying.
+    // Once this happens, USE_WRITE_BARRIER_HELPERS and CORINFO_FLG_WRITE_BARRIER_HELPER can be removed.
+    CorElementType type = pField->GetFieldType();
+
+    if(CorTypeInfo::IsObjRef(type))
+        fHelperRequired = true;
+    else if (type == ELEMENT_TYPE_VALUETYPE)
+    {
+        TypeHandle th = pField->GetFieldTypeHandleThrowing();
+        _ASSERTE(!th.IsNull());
+        if(th.GetMethodTable()->ContainsPointers())
+            fHelperRequired = true;
+    }
+
+    EE_TO_JIT_TRANSITION();
+
+    return fHelperRequired;
+}
+
+/*********************************************************************/
 DWORD CEEInfo::getFieldThreadLocalStoreID(CORINFO_FIELD_HANDLE fieldHnd, void **ppIndirection)
 {
     CONTRACTL {
@@ -9404,7 +9611,7 @@ DWORD CEEInfo::getFieldThreadLocalStoreID(CORINFO_FIELD_HANDLE fieldHnd, void **
     return result;
 }
 
-void *CEEInfo::allocateArray(size_t cBytes)
+void *CEEInfo::allocateArray(ULONG cBytes)
 {
     CONTRACTL {
         THROWS;
@@ -9894,6 +10101,29 @@ BOOL CEEInfo::isCompatibleDelegate(
 }
 
 /*********************************************************************/
+    // return the unmanaged target *if method has already been prelinked.*
+void* CEEInfo::getPInvokeUnmanagedTarget(CORINFO_METHOD_HANDLE method,
+                                                    void **ppIndirection)
+{
+    CONTRACTL {
+        THROWS;
+        GC_TRIGGERS;
+        MODE_PREEMPTIVE;
+    } CONTRACTL_END;
+
+    // Not expected to work due to multicore and tiered JIT potentially needing
+    // to call managed cctors
+    _ASSERTE(FALSE);
+
+    if (ppIndirection != NULL)
+    {
+        *ppIndirection = NULL;
+    }
+
+    return NULL;
+}
+
+/*********************************************************************/
     // return address of fixup area for late-bound N/Direct calls.
 void* CEEInfo::getAddressOfPInvokeFixup(CORINFO_METHOD_HANDLE method,
                                         void **ppIndirection)
@@ -10064,6 +10294,12 @@ void CEEInfo::getEEInfo(CORINFO_EE_INFO *pEEInfoOut)
     // Wrapper delegate offsets
     pEEInfoOut->offsetOfWrapperDelegateIndirectCell = OFFSETOF__DelegateObject__methodPtrAux;
 
+    // Remoting offsets
+    pEEInfoOut->offsetOfTransparentProxyRP = (DWORD)-1;
+    pEEInfoOut->offsetOfRealProxyServer    = (DWORD)-1;
+
+    pEEInfoOut->offsetOfObjArrayData       = OFFSETOF__PtrArray__m_Array_;
+
     pEEInfoOut->sizeOfReversePInvokeFrame  = (DWORD)-1;
 
     pEEInfoOut->osPageSize = GetOsPageSize();
@@ -10075,6 +10311,11 @@ void CEEInfo::getEEInfo(CORINFO_EE_INFO *pEEInfoOut)
 #else
     pEEInfoOut->osType = CORINFO_WINNT;
 #endif
+
+    // hardcode OS version to 0.0.0. These fields can be removed from JITEE interface
+    pEEInfoOut->osMajor = 0;
+    pEEInfoOut->osMinor = 0;
+    pEEInfoOut->osBuild = 0;
 
     EE_TO_JIT_TRANSITION();
 }
@@ -10608,6 +10849,13 @@ bool CEEInfo::runWithErrorTrap(void (*function)(void*), void* param)
 }
 
 /*********************************************************************/
+IEEMemoryManager* CEEInfo::getMemoryManager()
+{
+    UNREACHABLE(); // OBSOLETE
+    return NULL;
+}
+
+/*********************************************************************/
 int CEEInfo::doAssert(const char* szFile, int iLine, const char* szExpr)
 {
     STATIC_CONTRACT_THROWS;
@@ -10675,6 +10923,12 @@ BOOL CEEInfo::logMsg(unsigned level, const char* fmt, va_list args)
 
     return result;
 }
+
+void CEEInfo::yieldExecution()
+{
+    WRAPPER_NO_CONTRACT;
+}
+
 
 #ifndef CROSSGEN_COMPILE
 
@@ -11433,6 +11687,22 @@ WORD CEEJitInfo::getRelocTypeHint(void * target)
 
     // No hints
     return (WORD)-1;
+}
+
+void CEEJitInfo::getModuleNativeEntryPointRange(void** pStart, void** pEnd)
+{
+    CONTRACTL {
+        NOTHROW;
+        GC_NOTRIGGER;
+        MODE_PREEMPTIVE;
+    }
+    CONTRACTL_END;
+
+    JIT_TO_EE_TRANSITION_LEAF();
+
+    *pStart = *pEnd = 0;
+
+    EE_TO_JIT_TRANSITION_LEAF();
 }
 
 DWORD CEEJitInfo::getExpectedTargetArchitecture()
@@ -13833,6 +14103,15 @@ WORD CEEInfo::getRelocTypeHint(void * target)
 {
     LIMITED_METHOD_CONTRACT;
     UNREACHABLE_RET();      // only called on derived class.
+}
+
+void CEEInfo::getModuleNativeEntryPointRange(
+        void ** pStart, /* OUT */
+        void ** pEnd    /* OUT */
+        )
+{
+    LIMITED_METHOD_CONTRACT;
+    UNREACHABLE();      // only called on derived class.
 }
 
 DWORD CEEInfo::getExpectedTargetArchitecture()

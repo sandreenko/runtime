@@ -13,12 +13,17 @@ class CILJit : public ICorJitCompiler
                                          ULONG*               nativeSizeOfCode /* OUT */
                                          );
 
+    void clearCache(void);
+    BOOL isCacheCleanupRequired(void);
+
     void ProcessShutdownWork(ICorStaticInfo* statInfo);
 
     void getVersionIdentifier(GUID* versionIdentifier /* OUT */
                               );
 
     unsigned getMaxIntrinsicSIMDVectorLength(CORJIT_FLAGS cpuCompileFlags);
+
+    void setRealJit(ICorJitCompiler* realJitCompiler);
 };
 
 /*****************************************************************************

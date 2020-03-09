@@ -8,6 +8,7 @@
 
 #include "runtimedetails.h"
 #include "methodcallsummarizer.h"
+#include "ieememorymanager.h"
 
 class interceptor_ICJC : public ICorJitCompiler
 {
@@ -19,5 +20,7 @@ public:
     ICorJitCompiler*      original_ICorJitCompiler;
     MethodCallSummarizer* mcs;
 };
+
+extern interceptor_IEEMM* current_IEEMM; // we want this to live beyond the scope of a single compileMethodCall
 
 #endif
