@@ -15217,10 +15217,7 @@ void Compiler::impImportBlockCode(BasicBlock* block)
 
                     // The handle struct is returned in register
                     op1->AsCall()->gtReturnType = GetRuntimeHandleUnderlyingType();
-                    if (!compAllowReturnRetyping())
-                    {
-                        op1->AsCall()->gtRetClsHnd = classHandle;
-                    }
+                    op1->AsCall()->gtRetClsHnd  = classHandle;
 
                     tiRetVal = typeInfo(TI_STRUCT, classHandle);
                 }
@@ -15261,10 +15258,7 @@ void Compiler::impImportBlockCode(BasicBlock* block)
 
                 // The handle struct is returned in register
                 op1->AsCall()->gtReturnType = GetRuntimeHandleUnderlyingType();
-                if (!compAllowReturnRetyping())
-                {
-                    op1->AsCall()->gtRetClsHnd = tokenType;
-                }
+                op1->AsCall()->gtRetClsHnd  = tokenType;
 
                 tiRetVal = verMakeTypeInfo(tokenType);
                 impPushOnStack(op1, tiRetVal);
@@ -15437,33 +15431,16 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                     JITDUMP("\n Importing %s as helper call because %s\n", opcode == CEE_UNBOX ? "UNBOX" : "UNBOX.ANY",
                             canExpandInline ? "want smaller code or faster jitting" : "inline expansion not legal");
 
+                    bool unboxing = (helper == CORINFO_HELP_UNBOX);
+
                     // Don't optimize, just call the helper and be done with it
-                    op1 = gtNewHelperCallNode(helper,
-                                              (var_types)((helper == CORINFO_HELP_UNBOX) ? TYP_BYREF : TYP_STRUCT),
-                                              gtNewCallArgs(op2, op1));
-                    if (!compAllowReturnRetyping())
+                    op1 = gtNewHelperCallNode(helper, (unboxing ? TYP_BYREF : TYP_STRUCT), gtNewCallArgs(op2, op1));
+
+                    // If we are doing UNBOX_ANY the result is byref and does not require a handle.
+                    // Otherwise, the result is TYP_STRUCT and we need to capture its handle.
+                    if (!unboxing)
                     {
-                        if (op1->gtType == TYP_STRUCT)
-                        {
-                            op1->AsCall()->gtRetClsHnd = resolvedToken.hClass;
-                        }
-                        else
-                        {
-                            // We are doing unboxing, resolvedToken.hClass is available, but the result is byref
-                            // and gtRetClsHnd should not be used.
-                        }
-                    }
-                    else
-                    {
-                        if (op1->gtType == TYP_STRUCT)
-                        {
-                            op1->AsCall()->gtRetClsHnd = resolvedToken.hClass;
-                        }
-                        else
-                        {
-                            // We are doing unboxing, resolvedToken.hClass is available, but the result is byref
-                            // and gtRetClsHnd should not be used.
-                        }
+                        op1->AsCall()->gtRetClsHnd = resolvedToken.hClass;
                     }
                 }
 
