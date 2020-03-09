@@ -2022,6 +2022,10 @@ void SystemDomain::LoadBaseSystemClasses()
 #endif // FEATURE_UTF8STRING
 
 #ifndef CROSSGEN_COMPILE
+    CrossLoaderAllocatorHashSetup::EnsureTypesLoaded();
+#endif
+
+#ifndef CROSSGEN_COMPILE
     ECall::PopulateManagedStringConstructors();
 #endif // CROSSGEN_COMPILE
 

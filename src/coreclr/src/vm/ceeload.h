@@ -3243,9 +3243,6 @@ public:
 
     uint32_t GetNativeMetadataAssemblyCount();
 #endif // !defined(DACCESS_COMPILE)
-
-    // For protecting dictionary layout slot expansions
-    CrstExplicitInit        m_DictionaryCrst;
 };
 
 //
