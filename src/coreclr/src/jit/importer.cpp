@@ -1206,7 +1206,7 @@ GenTree* Compiler::impAssignStructPtr(GenTree*             destAddr,
 
             if (compAllowReturnRetyping())
             {
-                // We won't use a return buffer, so change the type of src->gtType to 'returnType'
+                // We're not using a return buffer, so if we're retyping we'll change the type of 'src' to 'returnTYpe'.
                 src->gtType = genActualType(returnType);
             }
 
@@ -9170,7 +9170,7 @@ GenTree* Compiler::impFixupStructReturnType(GenTree* op, CORINFO_CLASS_HANDLE re
 
     if (!compAllowReturnRetyping() && (!op->IsCall() || !op->AsCall()->TreatAsHasRetBufArg(this)))
     {
-        // TODO: deal with these 2 special JIT intrinsics that don't have return buffer, but act like they do.
+        // Don't retype `struct` as a primitive type in `ret` instruction.
         return op;
     }
 
@@ -15442,6 +15442,18 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                                               (var_types)((helper == CORINFO_HELP_UNBOX) ? TYP_BYREF : TYP_STRUCT),
                                               gtNewCallArgs(op2, op1));
                     if (!compAllowReturnRetyping())
+                    {
+                        if (op1->gtType == TYP_STRUCT)
+                        {
+                            op1->AsCall()->gtRetClsHnd = resolvedToken.hClass;
+                        }
+                        else
+                        {
+                            // We are doing unboxing, resolvedToken.hClass is available, but the result is byref
+                            // and gtRetClsHnd should not be used.
+                        }
+                    }
+                    else
                     {
                         if (op1->gtType == TYP_STRUCT)
                         {
