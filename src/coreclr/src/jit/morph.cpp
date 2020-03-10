@@ -7389,7 +7389,7 @@ GenTree* Compiler::fgMorphPotentialTailCall(GenTreeCall* call)
         {
             // This is a register-returned struct. Return a 0.
             // The actual return registers are hacked in lower and the register allocator.
-            assert(compAllowReturnRetyping());
+            assert(!compAllowReturnRetyping());
             nodeTy = TYP_INT;
         }
         result = gtNewZeroConNode(genActualType(nodeTy));
