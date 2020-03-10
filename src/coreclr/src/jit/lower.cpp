@@ -3171,7 +3171,8 @@ void Lowering::LowerRet(GenTreeUnOp* ret)
         {
             if (varTypeIsStruct(ret->TypeGet()) != varTypeIsStruct(ret->gtGetOp1()->TypeGet()))
             {
-                // a struct type field was replaced by its only primitive field with the same size, check `retypedFieldsMap`.
+                // a struct type field was replaced by its only primitive field with the same size, check
+                // `retypedFieldsMap`.
                 GenTree* retVal = ret->gtGetOp1();
                 assert(genActualType(comp->info.compRetNativeType) == genActualType(retVal->TypeGet()));
             }

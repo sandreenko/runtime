@@ -13670,6 +13670,13 @@ GenTree* Compiler::fgMorphSmpOpOptional(GenTreeOp* tree)
     switch (oper)
     {
         case GT_ASG:
+
+            if (optValnumCSE_phase)
+            {
+                // It is not safe to reorder/delete CSE's
+                break;
+            }
+
             if (varTypeIsStruct(typ) && !tree->IsPhiDefn())
             {
                 if (tree->OperIsCopyBlkOp())
@@ -13687,14 +13694,7 @@ GenTree* Compiler::fgMorphSmpOpOptional(GenTreeOp* tree)
                 break;
             }
 
-            /* Make sure we're allowed to do this */
-
-            if (optValnumCSE_phase)
-            {
-                // It is not safe to reorder/delete CSE's
-                break;
-            }
-
+            // Make sure we're allowed to do this.
             if (op2->gtFlags & GTF_ASG)
             {
                 break;
