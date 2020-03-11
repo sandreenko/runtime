@@ -219,9 +219,8 @@ void Lowering::LowerBlockStore(GenTreeBlk* blkNode)
 #endif
         }
     }
-    else
-    {
-        if (src->OperIs(GT_IND, GT_LCL_VAR, GT_LCL_FLD))
+
+        else if (src->OperIs(GT_IND, GT_LCL_VAR, GT_LCL_FLD))
         {
             src->SetContained();
 
@@ -337,7 +336,6 @@ void Lowering::LowerBlockStore(GenTreeBlk* blkNode)
                 blkNode->gtBlkOpKind = GenTreeBlk::BlkOpKindUnroll;
             }
         }
-    }
 }
 
 //------------------------------------------------------------------------
