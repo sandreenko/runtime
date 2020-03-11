@@ -15043,8 +15043,6 @@ GenTree* Compiler::gtNewTempAssign(
     GenTree* dest = gtNewLclvNode(tmp, dstTyp);
     dest->gtFlags |= GTF_VAR_DEF;
 
-    // TODO seandree: change the code below, because right now it is a mess.
-
     // With first-class structs, we should be propagating the class handle on all non-primitive
     // struct types. We don't have a convenient way to do that for all SIMD temps, since some
     // internal trees use SIMD types that are not used by the input IL. In this case, we allow
@@ -17117,7 +17115,7 @@ CORINFO_CLASS_HANDLE Compiler::gtGetStructHandleIfPresent(GenTree* tree)
 #endif
                 break;
         }
-        // TODO seandree: add a check that `structHnd != NO_CLASS_HANDLE`,
+        // TODO: add a check that `structHnd != NO_CLASS_HANDLE`,
         // today it won't work because the right part of an ASG could have struct type without a handle
         // (check `fgMorphBlockOperand(isBlkReqd`) and a few other cases.
     }

@@ -2818,7 +2818,8 @@ BAILOUT:
 void CodeGen::genCodeForStoreBlk(GenTreeBlk* storeBlkNode)
 {
     assert(storeBlkNode->OperIs(GT_STORE_OBJ, GT_STORE_DYN_BLK, GT_STORE_BLK));
-    assert(!storeBlkNode->Data()->IsCall()); // TODO seandree: support that case, now it is done via memory.
+    assert(!storeBlkNode->Data()->IsCall()); // TODO-1stClassStruct: support that case, now call's result has to be
+                                             // spilled.
 
     if (storeBlkNode->OperIs(GT_STORE_OBJ))
     {
@@ -3268,7 +3269,6 @@ void CodeGen::genCodeForCpBlkUnroll(GenTreeBlk* node)
     {
         assert(!compiler->compAllowReturnRetyping());
         assert(src->OperIs(GT_BITCAST));
-        // TODO seandree: Check that in `size < REGSIZE_BYTES` case we do extensions etc.
         assert(size <= REGSIZE_BYTES);
 
         instruction ins      = ins_Store(node->TypeGet());
@@ -3693,7 +3693,6 @@ void CodeGen::genCodeForCpObj(GenTreeObj* cpObjNode)
         {
             assert(!compiler->compAllowReturnRetyping());
             assert(source->OperIs(GT_BITCAST));
-            // TODO seandree: Check that in `size < REGSIZE_BYTES` case we do extensions etc.
             unsigned size = cpObjNode->GetLayout()->GetSize();
             assert(size <= REGSIZE_BYTES);
 
