@@ -13184,8 +13184,7 @@ void Compiler::impImportBlockCode(BasicBlock* block)
 
                 if ((prefixFlags & PREFIX_UNALIGNED) && !varTypeIsByte(lclTyp))
                 {
-                    assert(op1->OperGet() == GT_IND);
-                    op1->gtFlags |= GTF_IND_UNALIGNED;
+                    op1->AsIndir()->SetUnaligned();
                 }
 
                 op1 = gtNewAssignNode(op1, op2);
@@ -13281,8 +13280,7 @@ void Compiler::impImportBlockCode(BasicBlock* block)
 
                 if ((prefixFlags & PREFIX_UNALIGNED) && !varTypeIsByte(lclTyp))
                 {
-                    assert(op1->OperGet() == GT_IND);
-                    op1->gtFlags |= GTF_IND_UNALIGNED;
+                    op1->AsIndir()->SetUnaligned();
                 }
 
                 impPushOnStack(op1, tiRetVal);
@@ -14299,9 +14297,14 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                     {
                         if (!usesHelper)
                         {
-                            assert((op1->OperGet() == GT_FIELD) || (op1->OperGet() == GT_IND) ||
-                                   (op1->OperGet() == GT_OBJ));
-                            op1->gtFlags |= GTF_IND_UNALIGNED;
+                            if (op1->OperIs(GT_IND, GT_OBJ))
+                            {
+                                op1->AsIndir()->SetUnaligned();
+                            }
+                            else
+                            {
+                                op1->AsField()->SetUnaligned();
+                            }
                         }
                     }
                 }
@@ -14532,8 +14535,14 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                     }
                     if ((prefixFlags & PREFIX_UNALIGNED) && !varTypeIsByte(lclTyp))
                     {
-                        assert((op1->OperGet() == GT_FIELD) || (op1->OperGet() == GT_IND));
-                        op1->gtFlags |= GTF_IND_UNALIGNED;
+                        if (op1->OperIs(GT_IND))
+                        {
+                            op1->AsIndir()->SetUnaligned();
+                        }
+                        else
+                        {
+                            op1->AsField()->SetUnaligned();
+                        }
                     }
 
                     /* V4.0 allows assignment of i4 constant values to i8 type vars when IL verifier is bypassed (full
@@ -15925,7 +15934,7 @@ void Compiler::impImportBlockCode(BasicBlock* block)
 
                 if (prefixFlags & PREFIX_UNALIGNED)
                 {
-                    op1->gtFlags |= GTF_IND_UNALIGNED;
+                    op1->AsIndir()->SetUnaligned();
                 }
 
                 impPushOnStack(op1, tiRetVal);

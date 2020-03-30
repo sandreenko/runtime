@@ -9798,7 +9798,7 @@ void Compiler::gtDispNode(GenTree* tree, IndentStack* indentStack, __in __in_z _
                     --msgLength;
                     break;
                 }
-                if (tree->gtFlags & GTF_IND_UNALIGNED)
+                if (tree->gtFlags & GTF_FLD_UNALIGNED)
                 {
                     printf("U");
                     --msgLength;

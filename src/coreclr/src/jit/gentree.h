@@ -804,6 +804,7 @@ public:
 
 #define GTF_FLD_VOLATILE            0x40000000 // GT_FIELD/GT_CLS_VAR -- same as GTF_IND_VOLATILE
 #define GTF_FLD_INITCLASS           0x20000000 // GT_FIELD/GT_CLS_VAR -- field access requires preceding class/static init helper
+#define GTF_FLD_UNALIGNED           0x10000000 // GT_FIELD -- the field is unaligned (we assume worst case alignment of 1 byte)
 
 #define GTF_INX_RNGCHK              0x80000000 // GT_INDEX/GT_INDEX_ADDR -- the array reference should be range-checked.
 #define GTF_INX_STRING_LAYOUT       0x40000000 // GT_INDEX -- this uses the special string array layout
@@ -3258,6 +3259,17 @@ struct GenTreeField : public GenTree
         return (gtFlags & GTF_FLD_VOLATILE) != 0;
     }
 
+    void SetUnaligned()
+    {
+        gtFlags |= GTF_FLD_UNALIGNED;
+    }
+
+    // True if this indirection is an unaligned memory operation.
+    bool IsUnaligned() const
+    {
+        return (gtFlags & GTF_FLD_UNALIGNED) != 0;
+    }
+
 #if DEBUGGABLE_GENTREE
     GenTreeField() : GenTree()
     {
@@ -5077,6 +5089,11 @@ struct GenTreeIndir : public GenTreeOp
     bool IsVolatile() const
     {
         return (gtFlags & GTF_IND_VOLATILE) != 0;
+    }
+
+    void SetUnaligned()
+    {
+        gtFlags |= GTF_IND_UNALIGNED;
     }
 
     // True if this indirection is an unaligned memory operation.

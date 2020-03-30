@@ -13079,7 +13079,7 @@ DONE_MORPHING_CHILDREN:
                             {
                                 if ((ival1 % emitTypeSize(typ)) != 0)
                                 {
-                                    tree->gtFlags |= GTF_IND_UNALIGNED;
+                                    tree->AsIndir()->SetUnaligned();
                                     break;
                                 }
                             }
