@@ -10133,7 +10133,7 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
         }
 
 #if defined(TARGET_ARM)
-        if ((src->OperIsIndir()) && (src->gtFlags & GTF_IND_UNALIGNED))
+        if (src->OperIsIndir() && src->AsIndir()->IsUnaligned())
         {
             JITDUMP(" src is unaligned");
             requiresCopyBlock = true;

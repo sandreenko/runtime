@@ -7624,7 +7624,7 @@ void emitter::emitDispFrameRef(int varx, int disp, int offs, bool asmfm)
 void emitter::emitInsLoadStoreOp(instruction ins, emitAttr attr, regNumber dataReg, GenTreeIndir* indir)
 {
     // Handle unaligned floating point loads/stores
-    if ((indir->gtFlags & GTF_IND_UNALIGNED))
+    if (indir->IsUnaligned())
     {
         if (indir->OperGet() == GT_STOREIND)
         {

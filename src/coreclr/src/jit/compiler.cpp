@@ -8713,7 +8713,7 @@ void cTreeFlags(Compiler* comp, GenTree* tree)
                 {
                     chars += printf("[IND_ASG_LHS]");
                 }
-                if (tree->gtFlags & GTF_IND_UNALIGNED)
+                if (tree->AsIndir()->IsUnaligned())
                 {
                     chars += printf("[IND_UNALIGNED]");
                 }

@@ -1880,7 +1880,7 @@ void CodeGen::genCodeForIndir(GenTreeIndir* tree)
     {
 #ifdef TARGET_ARM64
         bool addrIsInReg   = tree->Addr()->isUsedFromReg();
-        bool addrIsAligned = ((tree->gtFlags & GTF_IND_UNALIGNED) == 0);
+        bool addrIsAligned = !tree->IsUnaligned();
 
         if ((ins == INS_ldrb) && addrIsInReg)
         {

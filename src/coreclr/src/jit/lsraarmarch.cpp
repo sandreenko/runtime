@@ -48,7 +48,7 @@ int LinearScan::BuildIndir(GenTreeIndir* indirTree)
 
 #ifdef TARGET_ARM
     // Unaligned loads/stores for floating point values must first be loaded into integer register(s)
-    if (indirTree->gtFlags & GTF_IND_UNALIGNED)
+    if (indirTree->IsUnaligned())
     {
         var_types type = TYP_UNDEF;
         if (indirTree->OperGet() == GT_STOREIND)
