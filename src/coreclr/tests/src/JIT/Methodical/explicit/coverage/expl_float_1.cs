@@ -8,20 +8,13 @@ using System.Runtime.InteropServices;
 [StructLayout(LayoutKind.Explicit)]
 internal struct AA
 {
-    [FieldOffset(3)]
-    public byte tmp1;
-
-    [FieldOffset(8)]
-    public float q;
-
     [FieldOffset(47)]
     public float tmp2;
 
     public AA(float qq)
     {
-        tmp1 = 0;
+
         tmp2 = 0;
-        q = qq;
     }
 
     public static AA[] a_init = new AA[101];
@@ -53,13 +46,8 @@ internal struct AA
     public static void reset()
     {
         a_init[100] = new AA(100);
-        a_zero[100] = new AA(0);
-        aa_init[0, 99, 1] = new AA(100);
-        aa_zero[0, 99, 1] = new AA(0);
-        _init = new AA(100);
-        _zero = new AA(0);
-        BB.f_init = new AA(100);
-        BB.f_zero = new AA(0);
+
+
     }
 }
 
