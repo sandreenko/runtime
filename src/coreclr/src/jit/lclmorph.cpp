@@ -878,6 +878,15 @@ private:
             return;
         }
 
+#ifdef TARGET_ARM
+        // TODO-ADDR: Support a misalignment floating point STORE_LCL_FLD in arm32 emitter.
+        if (varTypeIsFloating(indir->TypeGet()) && ((indir->gtFlags & GTF_IND_UNALIGNED) != 0))
+        {
+            assert(indir->OperIs(GT_FIELD));
+            return;
+        }
+#endif // TARGET_ARM
+
         LclVarDsc* varDsc = m_compiler->lvaGetDesc(val.LclNum());
 
         if (varDsc->TypeGet() != TYP_STRUCT)
