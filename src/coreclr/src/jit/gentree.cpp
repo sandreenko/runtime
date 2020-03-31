@@ -5712,7 +5712,7 @@ GenTreeIntCon* Compiler::gtNewIconNode(ssize_t value, var_types type)
 GenTreeIntCon* Compiler::gtNewIconNode(unsigned fieldOffset, FieldSeqNode* fieldSeq)
 {
     GenTreeIntCon* node = new (this, GT_CNS_INT) GenTreeIntCon(TYP_I_IMPL, static_cast<ssize_t>(fieldOffset));
-    node->gtFieldSeq    = fieldSeq == nullptr ? FieldSeqStore::NotAField() : fieldSeq;
+    node->gtFieldSeq    = (fieldSeq == nullptr) ? FieldSeqStore::NotAField() : fieldSeq;
     return node;
 }
 
@@ -6200,7 +6200,7 @@ GenTreeLclVar* Compiler::gtNewLclVarAddrNode(unsigned lclNum, var_types type)
 GenTreeLclFld* Compiler::gtNewLclFldAddrNode(unsigned lclNum, unsigned lclOffs, FieldSeqNode* fieldSeq, var_types type)
 {
     GenTreeLclFld* node = new (this, GT_LCL_FLD_ADDR) GenTreeLclFld(GT_LCL_FLD_ADDR, type, lclNum, lclOffs);
-    node->SetFieldSeq(fieldSeq == nullptr ? FieldSeqStore::NotAField() : fieldSeq);
+    node->SetFieldSeq((fieldSeq == nullptr) ? FieldSeqStore::NotAField() : fieldSeq);
     return node;
 }
 
@@ -18210,9 +18210,9 @@ FieldSeqStore::FieldSeqStore(CompAllocator alloc) : m_alloc(alloc), m_canonMap(n
 {
 }
 
-FieldSeqNode* FieldSeqStore::CreateSingleton(CORINFO_FIELD_HANDLE fieldHnd)
+FieldSeqNode* FieldSeqStore::CreateSingleton(CORINFO_FIELD_HANDLE fieldHnd, bool overlap)
 {
-    FieldSeqNode  fsn(fieldHnd, nullptr);
+    FieldSeqNode  fsn(fieldHnd, nullptr, overlap);
     FieldSeqNode* res = nullptr;
     if (m_canonMap->Lookup(fsn, &res))
     {
@@ -18296,6 +18296,11 @@ bool FieldSeqNode::IsConstantIndexFieldSeq()
 bool FieldSeqNode::IsPseudoField() const
 {
     return m_fieldHnd == FieldSeqStore::FirstElemPseudoField || m_fieldHnd == FieldSeqStore::ConstantIndexPseudoField;
+}
+
+bool FieldSeqNode::IsOverlapping() const
+{
+    return m_overlap;
 }
 
 #ifdef FEATURE_SIMD

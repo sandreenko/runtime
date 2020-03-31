@@ -223,8 +223,10 @@ struct FieldSeqNode
 {
     CORINFO_FIELD_HANDLE m_fieldHnd;
     FieldSeqNode*        m_next;
+    bool                 m_overlap;
 
-    FieldSeqNode(CORINFO_FIELD_HANDLE fieldHnd, FieldSeqNode* next) : m_fieldHnd(fieldHnd), m_next(next)
+    FieldSeqNode(CORINFO_FIELD_HANDLE fieldHnd, FieldSeqNode* next, bool overlap = false)
+        : m_fieldHnd(fieldHnd), m_next(next), m_overlap(overlap)
     {
     }
 
@@ -236,6 +238,8 @@ struct FieldSeqNode
 
     // returns true when this is the the pseudo #FirstElem field sequence or the pseudo #ConstantIndex field sequence
     bool IsPseudoField() const;
+
+    bool IsOverlapping() const;
 
     CORINFO_FIELD_HANDLE GetFieldHandle() const
     {
@@ -257,12 +261,14 @@ struct FieldSeqNode
     static int GetHashCode(FieldSeqNode fsn)
     {
         return static_cast<int>(reinterpret_cast<intptr_t>(fsn.m_fieldHnd)) ^
-               static_cast<int>(reinterpret_cast<intptr_t>(fsn.m_next));
+               static_cast<int>(reinterpret_cast<intptr_t>(fsn.m_next)) ^
+               static_cast<int>(fsn.m_overlap);
     }
 
     static bool Equals(const FieldSeqNode& fsn1, const FieldSeqNode& fsn2)
     {
-        return fsn1.m_fieldHnd == fsn2.m_fieldHnd && fsn1.m_next == fsn2.m_next;
+        return (fsn1.m_fieldHnd == fsn2.m_fieldHnd) && (fsn1.m_next == fsn2.m_next) &&
+               (fsn1.m_overlap == fsn2.m_overlap);
     }
 };
 
@@ -284,7 +290,7 @@ public:
     FieldSeqStore(CompAllocator alloc);
 
     // Returns the (canonical in the store) singleton field sequence for the given handle.
-    FieldSeqNode* CreateSingleton(CORINFO_FIELD_HANDLE fieldHnd);
+    FieldSeqNode* CreateSingleton(CORINFO_FIELD_HANDLE fieldHnd, bool overlap = false);
 
     // This is a special distinguished FieldSeqNode indicating that a constant does *not*
     // represent a valid field sequence.  This is "infectious", in the sense that appending it

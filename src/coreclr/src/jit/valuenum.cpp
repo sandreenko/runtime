@@ -3541,6 +3541,7 @@ ValueNum ValueNumStore::VNApplySelectors(ValueNumKind  vnk,
     else
     {
         assert(fieldSeq != FieldSeqStore::NotAField());
+        assert(!fieldSeq->IsOverlapping());
 
         // Skip any "FirstElem" pseudo-fields or any "ConstantIndex" pseudo-fields
         if (fieldSeq->IsPseudoField())
@@ -3715,6 +3716,7 @@ ValueNum ValueNumStore::VNApplySelectorsAssign(
     else
     {
         assert(fieldSeq != FieldSeqStore::NotAField());
+        assert(!fieldSeq->IsOverlapping());
 
         // Skip any "FirstElem" pseudo-fields or any "ConstantIndex" pseudo-fields
         // These will occur, at least, in struct static expressions, for method table offsets.
@@ -3792,7 +3794,7 @@ ValueNum ValueNumStore::VNForFieldSeq(FieldSeqNode* fieldSeq)
     {
         return VNForNull();
     }
-    else if (fieldSeq == FieldSeqStore::NotAField())
+    else if ((fieldSeq == FieldSeqStore::NotAField()) || fieldSeq->IsOverlapping())
     {
         // We always allocate a new, unique VN in this call.
         Chunk*   c                 = GetAllocChunk(TYP_REF, CEA_NotAField);
@@ -6638,7 +6640,8 @@ void Compiler::fgValueNumberBlockAssignment(GenTree* tree)
                     {
                         unsigned rhsLclNum = rhsLclVarTree->GetLclNum();
                         rhsVarDsc          = &lvaTable[rhsLclNum];
-                        if (!lvaInSsa(rhsLclNum) || rhsFldSeq == FieldSeqStore::NotAField())
+                        if (!lvaInSsa(rhsLclNum) || (rhsFldSeq == FieldSeqStore::NotAField()) ||
+                            (rhsFldSeq != nullptr && rhsFldSeq->IsOverlapping()))
                         {
                             rhsVNPair.SetBoth(vnStore->VNForExpr(compCurBB, rhsLclVarTree->TypeGet()));
                             isNewUniq = true;
@@ -6667,7 +6670,8 @@ void Compiler::fgValueNumberBlockAssignment(GenTree* tree)
                     {
                         unsigned rhsLclNum = rhsLclVarTree->GetLclNum();
                         rhsVarDsc          = &lvaTable[rhsLclNum];
-                        if (!lvaInSsa(rhsLclNum) || rhsFldSeq == FieldSeqStore::NotAField())
+                        if (!lvaInSsa(rhsLclNum) || (rhsFldSeq == FieldSeqStore::NotAField()) ||
+                            rhsFldSeq->IsOverlapping())
                         {
                             isNewUniq = true;
                         }
@@ -6688,6 +6692,7 @@ void Compiler::fgValueNumberBlockAssignment(GenTree* tree)
                             var_types     indType            = lclVarTree->TypeGet();
                             ValueNum      fieldSeqVN         = srcAddrFuncApp.m_args[0];
                             FieldSeqNode* fldSeqForStaticVar = vnStore->FieldSeqVNToFieldSeq(fieldSeqVN);
+                            assert(fldSeqForStaticVar != nullptr);
 #ifdef DEBUG
                             FieldSeqNode* zeroOffsetFldSeq = nullptr;
                             if (GetZeroOffsetFieldMap()->Lookup(srcAddr, &zeroOffsetFldSeq))
@@ -6696,7 +6701,8 @@ void Compiler::fgValueNumberBlockAssignment(GenTree* tree)
                                 assert(fldSeqForStaticVar->GetTail() == zeroOffsetFldSeq);
                             }
 #endif
-                            if (fldSeqForStaticVar != FieldSeqStore::NotAField())
+                            if ((fldSeqForStaticVar != FieldSeqStore::NotAField()) &&
+                                !fldSeqForStaticVar->IsOverlapping())
                             {
                                 // We model statics as indices into GcHeap (which is a subset of ByrefExposed).
                                 ValueNum selectedStaticVar;
@@ -6733,7 +6739,7 @@ void Compiler::fgValueNumberBlockAssignment(GenTree* tree)
                     }
                 }
 
-                if (lhsFldSeq == FieldSeqStore::NotAField())
+                if ((lhsFldSeq == FieldSeqStore::NotAField()) || ((lhsFldSeq != nullptr) && lhsFldSeq->IsOverlapping()))
                 {
                     // We don't have proper field sequence information for the lhs
                     //
@@ -7025,8 +7031,11 @@ void Compiler::fgValueNumberTree(GenTree* tree)
                     unsigned   ssaNum = lclFld->GetSsaNum();
                     LclVarDsc* varDsc = &lvaTable[lclNum];
 
-                    var_types indType = tree->TypeGet();
-                    if ((lclFld->GetFieldSeq() == FieldSeqStore::NotAField()) || !lvaInSsa(lclFld->GetLclNum()))
+                    var_types     indType = tree->TypeGet();
+                    FieldSeqNode* fldSeq  = lclFld->GetFieldSeq();
+                    assert(fldSeq != nullptr);
+                    if ((fldSeq == FieldSeqStore::NotAField()) || !lvaInSsa(lclFld->GetLclNum()) ||
+                        fldSeq->IsOverlapping())
                     {
                         // This doesn't represent a proper field access or it's a struct
                         // with overlapping fields that is hard to reason about; return a new unique VN.
@@ -7307,9 +7316,10 @@ void Compiler::fgValueNumberTree(GenTree* tree)
                         }
                         else
                         {
+                            FieldSeqNode* fldSeq = lclFld->GetFieldSeq();
                             // We should never have a null field sequence here.
-                            assert(lclFld->GetFieldSeq() != nullptr);
-                            if (lclFld->GetFieldSeq() == FieldSeqStore::NotAField())
+                            assert(fldSeq != nullptr);
+                            if ((fldSeq == FieldSeqStore::NotAField()) || fldSeq->IsOverlapping())
                             {
                                 // We don't know what field this represents.  Assign a new VN to the whole variable
                                 // (since we may be writing to an unknown portion of it.)
@@ -7323,7 +7333,7 @@ void Compiler::fgValueNumberTree(GenTree* tree)
                                 // (we looked in a side table above for its "def" identity).  Look up that value.
                                 ValueNumPair oldLhsVNPair =
                                     lvaTable[lclFld->GetLclNum()].GetPerSsaData(lclFld->GetSsaNum())->m_vnPair;
-                                newLhsVNPair = vnStore->VNPairApplySelectorsAssign(oldLhsVNPair, lclFld->GetFieldSeq(),
+                                newLhsVNPair = vnStore->VNPairApplySelectorsAssign(oldLhsVNPair, fldSeq,
                                                                                    rhsVNPair, // Pre-value.
                                                                                    lclFld->TypeGet(), compCurBB);
                             }
@@ -7408,6 +7418,7 @@ void Compiler::fgValueNumberTree(GenTree* tree)
                             if (lvaInSsa(lclNum))
                             {
                                 FieldSeqNode* fieldSeq = vnStore->FieldSeqVNToFieldSeq(funcApp.m_args[1]);
+                                assert(fieldSeq != nullptr);
 
                                 // Either "arg" is the address of (part of) a local itself, or else we have
                                 // a "rogue" PtrToLoc, one that should have made the local in question
@@ -7422,7 +7433,7 @@ void Compiler::fgValueNumberTree(GenTree* tree)
                                     // The local #'s should agree.
                                     assert(lclNum == lclVarTree->GetLclNum());
 
-                                    if (fieldSeq == FieldSeqStore::NotAField())
+                                    if ((fieldSeq == FieldSeqStore::NotAField()) || fieldSeq->IsOverlapping())
                                     {
                                         // We don't know where we're storing, so give the local a new, unique VN.
                                         // Do this by considering it an "entire" assignment, with an unknown RHS.
@@ -7545,13 +7556,13 @@ void Compiler::fgValueNumberTree(GenTree* tree)
                         }
                         else if (arg->IsFieldAddr(this, &obj, &staticOffset, &fldSeq))
                         {
-                            if (fldSeq == FieldSeqStore::NotAField())
+                            assert(fldSeq != nullptr);
+                            if ((fldSeq == FieldSeqStore::NotAField()) || fldSeq->IsOverlapping())
                             {
                                 fgMutateGcHeap(tree DEBUGARG("NotAField"));
                             }
                             else
                             {
-                                assert(fldSeq != nullptr);
 #ifdef DEBUG
                                 CORINFO_CLASS_HANDLE fldCls = info.compCompHnd->getFieldClass(fldSeq->m_fieldHnd);
                                 if (obj != nullptr)
@@ -7771,7 +7782,7 @@ void Compiler::fgValueNumberTree(GenTree* tree)
                 //
                 FieldSeqNode* zeroOffsetFieldSeq = nullptr;
                 if (GetZeroOffsetFieldMap()->Lookup(tree, &zeroOffsetFieldSeq) &&
-                    (zeroOffsetFieldSeq != FieldSeqStore::NotAField()))
+                    (zeroOffsetFieldSeq != FieldSeqStore::NotAField()) && !zeroOffsetFieldSeq->IsOverlapping())
                 {
                     ValueNum addrExtended = vnStore->ExtendPtrVN(arg->AsOp()->gtOp1, zeroOffsetFieldSeq);
                     if (addrExtended != ValueNumStore::NoVN)
@@ -7861,6 +7872,7 @@ void Compiler::fgValueNumberTree(GenTree* tree)
                     return;
                 }
                 assert(fldSeq != FieldSeqStore::NotAField());
+                assert((fldSeq == nullptr) || !fldSeq->IsOverlapping());
 
                 // Otherwise...
                 // Need to form H[arrType][arr][ind][fldSeq]
@@ -7926,7 +7938,8 @@ void Compiler::fgValueNumberTree(GenTree* tree)
                     unsigned   ssaNum = lclVarTree->GetSsaNum();
                     LclVarDsc* varDsc = &lvaTable[lclNum];
 
-                    if ((localFldSeq == FieldSeqStore::NotAField()) || (localFldSeq == nullptr))
+                    if ((localFldSeq == FieldSeqStore::NotAField()) || (localFldSeq == nullptr) ||
+                        localFldSeq->IsOverlapping())
                     {
                         tree->gtVNPair.SetBoth(vnStore->VNForExpr(compCurBB, tree->TypeGet()));
                     }
@@ -7945,8 +7958,9 @@ void Compiler::fgValueNumberTree(GenTree* tree)
                     ValueNum  fieldSeqVN = funcApp.m_args[0];
 
                     FieldSeqNode* fldSeqForStaticVar = vnStore->FieldSeqVNToFieldSeq(fieldSeqVN);
+                    assert(fldSeqForStaticVar != nullptr);
 
-                    if (fldSeqForStaticVar != FieldSeqStore::NotAField())
+                    if ((fldSeqForStaticVar != FieldSeqStore::NotAField()) && !fldSeqForStaticVar->IsOverlapping())
                     {
                         ValueNum selectedStaticVar;
                         // We model statics as indices into the GcHeap (which is a subset of ByrefExposed).
@@ -7971,7 +7985,7 @@ void Compiler::fgValueNumberTree(GenTree* tree)
                 }
                 else if (addr->IsFieldAddr(this, &obj, &staticOffset, &fldSeq2))
                 {
-                    if (fldSeq2 == FieldSeqStore::NotAField())
+                    if ((fldSeq2 == FieldSeqStore::NotAField()) || ((fldSeq2 != nullptr) && fldSeq2->IsOverlapping()))
                     {
                         tree->gtVNPair.SetBoth(vnStore->VNForExpr(compCurBB, tree->TypeGet()));
                     }

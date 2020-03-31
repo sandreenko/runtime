@@ -247,14 +247,8 @@ class LocalAddressVisitor final : public GenTreeVisitor<LocalAddressVisitor>
                 m_lclNum = val.m_lclNum;
                 m_offset = newOffset.Value();
 
-                if (field->gtFldMayOverlap)
-                {
-                    m_fieldSeq = FieldSeqStore::NotAField();
-                }
-                else
-                {
-                    m_fieldSeq = fieldSeqStore->Append(val.m_fieldSeq, fieldSeqStore->CreateSingleton(field->gtFldHnd));
-                }
+                FieldSeqNode* fldSeq = fieldSeqStore->CreateSingleton(field->gtFldHnd, field->gtFldMayOverlap);
+                m_fieldSeq           = fieldSeqStore->Append(val.m_fieldSeq, fldSeq);
             }
 
             INDEBUG(val.Consume();)

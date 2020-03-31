@@ -1482,7 +1482,6 @@ inline void GenTree::ChangeOper(genTreeOps oper, ValueNumberUpdate vnUpdate)
             bool          isZeroOffset = compiler->GetZeroOffsetFieldMap()->Lookup(this, &zeroFieldSeq);
 
             AsLclFld()->SetLclOffs(0);
-            AsLclFld()->SetFieldSeq(FieldSeqStore::NotAField());
 
             if (zeroFieldSeq != nullptr)
             {
@@ -1490,6 +1489,10 @@ inline void GenTree::ChangeOper(genTreeOps oper, ValueNumberUpdate vnUpdate)
                 AsLclFld()->SetFieldSeq(zeroFieldSeq);
                 // and remove the annotation from the ZeroOffsetFieldMap
                 compiler->GetZeroOffsetFieldMap()->Remove(this);
+            }
+            else
+            {
+                AsLclFld()->SetFieldSeq(FieldSeqStore::NotAField());
             }
             break;
         }
