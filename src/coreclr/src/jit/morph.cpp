@@ -13327,43 +13327,45 @@ DONE_MORPHING_CHILDREN:
                 // Perform the transform ADDR(COMMA(x, ..., z)) == COMMA(x, ..., ADDR(z)).
                 // (Be sure to mark "z" as an l-value...)
 
+                GenTree* firstComma = op1;
+
                 GenTreePtrStack commas(getAllocator(CMK_ArrayStack));
-                for (GenTree* comma = op1; comma != nullptr && comma->gtOper == GT_COMMA; comma = comma->gtGetOp2())
+                for (GenTree* comma = firstComma; comma != nullptr && comma->gtOper == GT_COMMA;
+                     comma          = comma->gtGetOp2())
                 {
                     commas.Push(comma);
                 }
-                GenTree* commaNode = commas.Top();
+                GenTreeOp* lastComma = commas.Top()->AsOp();
 
                 // The top-level addr might be annotated with a zeroOffset field.
                 FieldSeqNode* zeroFieldSeq = nullptr;
                 bool          isZeroOffset = GetZeroOffsetFieldMap()->Lookup(tree, &zeroFieldSeq);
-                tree                       = op1;
-                commaNode->AsOp()->gtOp2->gtFlags |= GTF_DONT_CSE;
+                lastComma->gtGetOp2()->gtFlags |= GTF_DONT_CSE;
 
                 // If the node we're about to put under a GT_ADDR is an indirection, it
                 // doesn't need to be materialized, since we only want the addressing mode. Because
                 // of this, this GT_IND is not a faulting indirection and we don't have to extract it
                 // as a side effect.
-                GenTree* commaOp2 = commaNode->AsOp()->gtOp2;
-                if (commaOp2->OperIsBlk())
+                GenTree* lastCommaOp2 = lastComma->gtGetOp2();
+                if (lastCommaOp2->OperIsBlk())
                 {
-                    commaOp2->SetOper(GT_IND);
+                    lastCommaOp2->SetOper(GT_IND);
                 }
-                if (commaOp2->gtOper == GT_IND)
+                if (lastCommaOp2->gtOper == GT_IND)
                 {
-                    commaOp2->gtFlags |= GTF_IND_NONFAULTING;
-                    commaOp2->gtFlags &= ~GTF_EXCEPT;
-                    commaOp2->gtFlags |= (commaOp2->AsOp()->gtOp1->gtFlags & GTF_EXCEPT);
+                    lastCommaOp2->gtFlags |= GTF_IND_NONFAULTING;
+                    lastCommaOp2->gtFlags &= ~GTF_EXCEPT;
+                    lastCommaOp2->gtFlags |= (lastCommaOp2->AsOp()->gtGetOp1()->gtFlags & GTF_EXCEPT);
                 }
 
-                op1 = gtNewOperNode(GT_ADDR, TYP_BYREF, commaOp2);
+                GenTree* addr = gtNewOperNode(GT_ADDR, TYP_BYREF, lastCommaOp2);
 
                 if (isZeroOffset)
                 {
                     // Transfer the annotation to the new GT_ADDR node.
-                    fgAddFieldSeqForZeroOffset(op1, zeroFieldSeq);
+                    fgAddFieldSeqForZeroOffset(addr, zeroFieldSeq);
                 }
-                commaNode->AsOp()->gtOp2 = op1;
+                lastComma->gtOp2 = addr;
                 // Originally, I gave all the comma nodes type "byref".  But the ADDR(IND(x)) == x transform
                 // might give op1 a type different from byref (like, say, native int).  So now go back and give
                 // all the comma nodes the type of op1.
@@ -13374,15 +13376,15 @@ DONE_MORPHING_CHILDREN:
                 while (!commas.Empty())
                 {
                     GenTree* comma = commas.Pop();
-                    comma->gtType  = op1->gtType;
-                    comma->gtFlags |= op1->gtFlags;
+                    comma->gtType  = addr->gtType;
+                    comma->gtFlags |= addr->gtFlags;
 #ifdef DEBUG
                     comma->gtDebugFlags |= GTF_DEBUG_NODE_MORPHED;
 #endif
                     gtUpdateNodeSideEffects(comma);
                 }
-
-                return tree;
+                DEBUG_DESTROY_NODE(tree);
+                return firstComma;
             }
 
             /* op1 of a GT_ADDR is an l-value. Only r-values can be CSEed */
