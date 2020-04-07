@@ -13327,8 +13327,7 @@ DONE_MORPHING_CHILDREN:
                 // Perform the transform ADDR(COMMA(x, ..., z)) == COMMA(x, ..., ADDR(z)).
                 // (Be sure to mark "z" as an l-value...)
 
-                GenTree* firstComma = op1;
-
+                GenTree*        firstComma = op1;
                 GenTreePtrStack commas(getAllocator(CMK_ArrayStack));
                 for (GenTree* comma = firstComma; comma != nullptr && comma->gtOper == GT_COMMA;
                      comma          = comma->gtGetOp2())
@@ -13340,13 +13339,13 @@ DONE_MORPHING_CHILDREN:
                 // The top-level addr might be annotated with a zeroOffset field.
                 FieldSeqNode* zeroFieldSeq = nullptr;
                 bool          isZeroOffset = GetZeroOffsetFieldMap()->Lookup(tree, &zeroFieldSeq);
-                lastComma->gtGetOp2()->gtFlags |= GTF_DONT_CSE;
 
                 // If the node we're about to put under a GT_ADDR is an indirection, it
                 // doesn't need to be materialized, since we only want the addressing mode. Because
                 // of this, this GT_IND is not a faulting indirection and we don't have to extract it
                 // as a side effect.
                 GenTree* lastCommaOp2 = lastComma->gtGetOp2();
+
                 if (lastCommaOp2->OperIsBlk())
                 {
                     lastCommaOp2->SetOper(GT_IND);
@@ -13359,6 +13358,7 @@ DONE_MORPHING_CHILDREN:
                 }
 
                 GenTree* addr = gtNewOperNode(GT_ADDR, TYP_BYREF, lastCommaOp2);
+                INDEBUG(addr->gtDebugFlags |= GTF_DEBUG_NODE_MORPHED);
 
                 if (isZeroOffset)
                 {
@@ -13366,21 +13366,13 @@ DONE_MORPHING_CHILDREN:
                     fgAddFieldSeqForZeroOffset(addr, zeroFieldSeq);
                 }
                 lastComma->gtOp2 = addr;
-                // Originally, I gave all the comma nodes type "byref".  But the ADDR(IND(x)) == x transform
-                // might give op1 a type different from byref (like, say, native int).  So now go back and give
-                // all the comma nodes the type of op1.
-                // TODO: the comma flag update below is conservative and can be improved.
-                // For example, if we made the ADDR(IND(x)) == x transformation, we may be able to
-                // get rid of some of the IND flags on the COMMA nodes (e.g., GTF_GLOB_REF).
-
+                // `ADDR(IND(x)) == x` transformation might give `addr` a type different from byref
+                // (like, say, native int). So now go back and give all the comma nodes the type of `addr`.
                 while (!commas.Empty())
                 {
                     GenTree* comma = commas.Pop();
                     comma->gtType  = addr->gtType;
-                    comma->gtFlags |= addr->gtFlags;
-#ifdef DEBUG
-                    comma->gtDebugFlags |= GTF_DEBUG_NODE_MORPHED;
-#endif
+                    comma->gtFlags &= ~GTF_ALL_EFFECT;
                     gtUpdateNodeSideEffects(comma);
                 }
                 DEBUG_DESTROY_NODE(tree);

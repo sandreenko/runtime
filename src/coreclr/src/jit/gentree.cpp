@@ -8035,12 +8035,12 @@ void Compiler::gtUpdateNodeOperSideEffects(GenTree* tree)
 //                          children's side efects.
 //
 // Arguments:
-//    tree            - Tree to update the side effects on
+//    tree - Tree to update the side effects on
 //
 // Notes:
-//    This method currently only updates GTF_EXCEPT and GTF_ASG flags. The other side effect
-//    flags may remain unnecessarily (conservatively) set.
-
+//    This method currently only could clear GTF_EXCEPT, GTF_ASG, and GTF_CALL flags.
+//    The other side effect flags may remain unnecessarily (conservatively) set.
+//
 void Compiler::gtUpdateNodeSideEffects(GenTree* tree)
 {
     gtUpdateNodeOperSideEffects(tree);
