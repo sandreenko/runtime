@@ -13206,54 +13206,55 @@ DONE_MORPHING_CHILDREN:
                 // TBD: this transformation is currently necessary for correctness -- it might
                 // be good to analyze the failures that result if we don't do this, and fix them
                 // in other ways.  Ideally, this should be optional.
-                GenTree* commaNode = op1;
-                unsigned treeFlags = tree->gtFlags;
-                commaNode->gtType  = typ;
-                commaNode->gtFlags = (treeFlags & ~GTF_REVERSE_OPS); // Bashing the GT_COMMA flags here is
-                                                                     // dangerous, clear the GTF_REVERSE_OPS at
-                                                                     // least.
+                GenTreeOp* firstComma = op1->AsOp();
+                unsigned   treeFlags  = tree->gtFlags;
+                firstComma->gtType    = typ;
+                firstComma->gtFlags   = (treeFlags & ~GTF_REVERSE_OPS); // Bashing the GT_COMMA flags here is
+                                                                        // dangerous, clear the GTF_REVERSE_OPS at
+                                                                        // least.
 #ifdef DEBUG
-                commaNode->gtDebugFlags |= GTF_DEBUG_NODE_MORPHED;
+                firstComma->gtDebugFlags |= GTF_DEBUG_NODE_MORPHED;
 #endif
-                while (commaNode->AsOp()->gtOp2->gtOper == GT_COMMA)
+                GenTreeOp* comma = firstComma;
+                while (comma->gtGetOp2()->OperIs(GT_COMMA))
                 {
-                    commaNode         = commaNode->AsOp()->gtOp2;
-                    commaNode->gtType = typ;
-                    commaNode->gtFlags =
+                    comma         = comma->gtGetOp2()->AsOp();
+                    comma->gtType = typ;
+                    comma->gtFlags =
                         (treeFlags & ~GTF_REVERSE_OPS & ~GTF_ASG & ~GTF_CALL); // Bashing the GT_COMMA flags here is
                     // dangerous, clear the GTF_REVERSE_OPS, GT_ASG, and GT_CALL at
                     // least.
-                    commaNode->gtFlags |= ((commaNode->AsOp()->gtOp1->gtFlags | commaNode->AsOp()->gtOp2->gtFlags) &
-                                           (GTF_ASG | GTF_CALL));
+                    comma->gtFlags |=
+                        ((comma->gtGetOp1()->gtFlags | comma->gtGetOp2()->gtFlags) & (GTF_ASG | GTF_CALL));
 #ifdef DEBUG
-                    commaNode->gtDebugFlags |= GTF_DEBUG_NODE_MORPHED;
+                    comma->gtDebugFlags |= GTF_DEBUG_NODE_MORPHED;
 #endif
                 }
-                bool      wasArrIndex = (tree->gtFlags & GTF_IND_ARR_INDEX) != 0;
-                ArrayInfo arrInfo;
+                GenTreeOp* lastComma   = comma;
+                bool       wasArrIndex = ((tree->gtFlags & GTF_IND_ARR_INDEX) != 0);
+                ArrayInfo  arrInfo;
                 if (wasArrIndex)
                 {
                     bool b = GetArrayInfoMap()->Lookup(tree, &arrInfo);
                     assert(b);
                     GetArrayInfoMap()->Remove(tree);
                 }
-                tree          = op1;
-                GenTree* addr = commaNode->AsOp()->gtOp2;
-                op1           = gtNewIndir(typ, addr);
+                GenTree* addr  = lastComma->AsOp()->gtGetOp2();
+                GenTree* indir = gtNewIndir(typ, addr);
                 // This is very conservative
-                op1->gtFlags |= treeFlags & ~GTF_ALL_EFFECT & ~GTF_IND_NONFAULTING;
-                op1->gtFlags |= (addr->gtFlags & GTF_ALL_EFFECT);
+                indir->gtFlags |= treeFlags & ~GTF_ALL_EFFECT & ~GTF_IND_NONFAULTING;
+                indir->gtFlags |= (addr->gtFlags & GTF_ALL_EFFECT);
 
                 if (wasArrIndex)
                 {
-                    GetArrayInfoMap()->Set(op1, arrInfo);
+                    GetArrayInfoMap()->Set(indir, arrInfo);
                 }
 #ifdef DEBUG
-                op1->gtDebugFlags |= GTF_DEBUG_NODE_MORPHED;
+                indir->gtDebugFlags |= GTF_DEBUG_NODE_MORPHED;
 #endif
-                commaNode->AsOp()->gtOp2 = op1;
-                commaNode->gtFlags |= (op1->gtFlags & GTF_ALL_EFFECT);
-                return tree;
+                lastComma->gtOp2 = indir;
+                lastComma->gtFlags |= (indir->gtFlags & GTF_ALL_EFFECT);
+                return firstComma;
             }
 
             break;
