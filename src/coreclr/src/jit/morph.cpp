@@ -13206,31 +13206,17 @@ DONE_MORPHING_CHILDREN:
                 // TBD: this transformation is currently necessary for correctness -- it might
                 // be good to analyze the failures that result if we don't do this, and fix them
                 // in other ways.  Ideally, this should be optional.
-                GenTreeOp* firstComma = op1->AsOp();
-                unsigned   treeFlags  = tree->gtFlags;
-                firstComma->gtType    = typ;
-                firstComma->gtFlags   = (treeFlags & ~GTF_REVERSE_OPS); // Bashing the GT_COMMA flags here is
-                                                                        // dangerous, clear the GTF_REVERSE_OPS at
-                                                                        // least.
-#ifdef DEBUG
-                firstComma->gtDebugFlags |= GTF_DEBUG_NODE_MORPHED;
-#endif
-                GenTreeOp* comma = firstComma;
-                while (comma->gtGetOp2()->OperIs(GT_COMMA))
+                unsigned treeFlags = tree->gtFlags;
+
+                GenTreeOp*      firstComma = op1->AsOp();
+                GenTreePtrStack commas(getAllocator(CMK_ArrayStack));
+                for (GenTree* comma = firstComma; comma != nullptr && comma->gtOper == GT_COMMA;
+                     comma          = comma->gtGetOp2())
                 {
-                    comma         = comma->gtGetOp2()->AsOp();
-                    comma->gtType = typ;
-                    comma->gtFlags =
-                        (treeFlags & ~GTF_REVERSE_OPS & ~GTF_ASG & ~GTF_CALL); // Bashing the GT_COMMA flags here is
-                    // dangerous, clear the GTF_REVERSE_OPS, GT_ASG, and GT_CALL at
-                    // least.
-                    comma->gtFlags |=
-                        ((comma->gtGetOp1()->gtFlags | comma->gtGetOp2()->gtFlags) & (GTF_ASG | GTF_CALL));
-#ifdef DEBUG
-                    comma->gtDebugFlags |= GTF_DEBUG_NODE_MORPHED;
-#endif
+                    commas.Push(comma);
                 }
-                GenTreeOp* lastComma   = comma;
+
+                GenTreeOp* lastComma   = commas.Top()->AsOp();
                 bool       wasArrIndex = ((tree->gtFlags & GTF_IND_ARR_INDEX) != 0);
                 ArrayInfo  arrInfo;
                 if (wasArrIndex)
@@ -13241,19 +13227,23 @@ DONE_MORPHING_CHILDREN:
                 }
                 GenTree* addr  = lastComma->AsOp()->gtGetOp2();
                 GenTree* indir = gtNewIndir(typ, addr);
-                // This is very conservative
-                indir->gtFlags |= treeFlags & ~GTF_ALL_EFFECT & ~GTF_IND_NONFAULTING;
-                indir->gtFlags |= (addr->gtFlags & GTF_ALL_EFFECT);
+                indir->gtFlags |= treeFlags & ~(GTF_ALL_EFFECT | GTF_IND_NONFAULTING);
 
                 if (wasArrIndex)
                 {
                     GetArrayInfoMap()->Set(indir, arrInfo);
                 }
-#ifdef DEBUG
-                indir->gtDebugFlags |= GTF_DEBUG_NODE_MORPHED;
-#endif
+                INDEBUG(indir->gtDebugFlags |= GTF_DEBUG_NODE_MORPHED);
                 lastComma->gtOp2 = indir;
-                lastComma->gtFlags |= (indir->gtFlags & GTF_ALL_EFFECT);
+
+                while (!commas.Empty())
+                {
+                    GenTree* comma = commas.Pop();
+                    comma->gtType  = indir->gtType;
+                    comma->gtFlags &= ~GTF_ALL_EFFECT;
+                    gtUpdateNodeSideEffects(comma);
+                }
+
                 return firstComma;
             }
 
