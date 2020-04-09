@@ -3557,6 +3557,11 @@ unsigned Compiler::gtSetEvalOrder(GenTree* tree)
                     costSz = 0;
                     break;
 
+                //case GT_NULLCHECK:
+                //    costEx = 0;
+                //    costSz = 0;
+                //    goto DONE;
+
                 case GT_INTRINSIC:
                     // GT_INTRINSIC intrinsics Sin, Cos, Sqrt, Abs ... have higher costs.
                     // TODO: tune these costs target specific as some of these are
@@ -13367,6 +13372,7 @@ GenTree* Compiler::gtTryRemoveBoxUpstreamEffects(GenTree* op, BoxRemovalOptions 
         {
             JITDUMP(" to read first byte of struct via modified [%06u]\n", dspTreeID(copySrc));
             copySrc->ChangeOper(GT_NULLCHECK);
+            copySrc->gtFlags &= ~GTF_DONT_CSE;
             copySrc->gtType = TYP_BYTE;
             compCurBB->bbFlags |= BBF_HAS_NULLCHECK;
             optMethodFlags |= OMF_HAS_NULLCHECK;

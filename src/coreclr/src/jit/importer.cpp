@@ -12976,6 +12976,7 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                             if (op1->OperIs(GT_FIELD, GT_IND, GT_OBJ))
                             {
                                 op1->ChangeOper(GT_NULLCHECK);
+                                op1->gtFlags &= ~GTF_DONT_CSE;
                                 block->bbFlags |= BBF_HAS_NULLCHECK;
                                 optMethodFlags |= OMF_HAS_NULLCHECK;
                                 op1->gtType = TYP_BYTE;
