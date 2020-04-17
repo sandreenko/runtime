@@ -15137,6 +15137,14 @@ GenTree* Compiler::gtNewTempAssign(
             // and call returns. Lowering and Codegen will handle these.
             ok = true;
         }
+        else if (dstTyp == TYP_STRUCT && valTyp == TYP_INT)
+        {
+            // It could come from `ASG(struct, 0)` that was propogated to `RETURN struct(0)`,
+            // and now it is merging to a struct again.
+            assert(!compAllowReturnRetyping());
+            assert(tmp == genReturnLocal);
+            ok = true;
+        }
 
         if (!ok)
         {
@@ -15168,15 +15176,23 @@ GenTree* Compiler::gtNewTempAssign(
     CORINFO_CLASS_HANDLE valStructHnd = gtGetStructHandleIfPresent(val);
     if (varTypeIsStruct(varDsc) && (valStructHnd == NO_CLASS_HANDLE) && !varTypeIsSIMD(valTyp))
     {
-        // That is a very special case when we have lost classHandle from a LCL_FIELD node
-        // because the parent struct has overlapping fields and now we need to assign the LCL_FIELD
-        // to a merge return local, in this case, we can use the type of the merge return for the assignment.
-        noway_assert(tmp == genReturnLocal);
+        // There are 2 special cases:
+        // 1. we have lost classHandle from a LCL_FIELD node  because the parent struct has overlapping fields;
+        // 2. we are propogating `ASG(struct V01, 0)` to `RETURN(struct V01)`, `CNT_INT` doesn't `structHnd`;
+        // in these cases, we can use the type of the merge return for the assignment.
+        assert(val->OperIs(GT_LCL_FLD, GT_CNS_INT));
+        assert(!compAllowReturnRetyping());
+        assert(tmp == genReturnLocal);
         valStructHnd = lvaGetStruct(genReturnLocal);
-        noway_assert(valStructHnd != NO_CLASS_HANDLE);
+        assert(valStructHnd != NO_CLASS_HANDLE);
     }
 
-    if (varTypeIsStruct(varDsc) && ((valStructHnd != NO_CLASS_HANDLE) || varTypeIsSIMD(valTyp)))
+    if ((valStructHnd != NO_CLASS_HANDLE) && val->IsConstInitVal())
+    {
+        assert(!compAllowReturnRetyping());
+        asg = gtNewAssignNode(dest, val);
+    }
+    else if (varTypeIsStruct(varDsc) && ((valStructHnd != NO_CLASS_HANDLE) || varTypeIsSIMD(valTyp)))
     {
         // The struct value may be be a child of a GT_COMMA.
         GenTree* valx = val->gtEffectiveVal(/*commaOnly*/ true);
