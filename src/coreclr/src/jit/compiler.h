@@ -3391,7 +3391,7 @@ public:
 
     // This class is responsible for checking validity and profitability of struct promotion.
     // If it is both legal and profitable, then TryPromoteStructVar promotes the struct and initializes
-    // nessesary information for fgMorphStructField to use.
+    // nessesary information for LocalAddressVisitor::MorphStructField to use.
     class StructPromotionHelper
     {
     public:
@@ -5596,7 +5596,6 @@ private:
 #endif
 
     void fgPromoteStructs();
-    void fgMorphStructField(GenTree* tree, GenTree* parent);
     void fgMorphLocalField(GenTree* tree, GenTree* parent);
 
     // Reset the refCount for implicit byrefs.
