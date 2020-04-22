@@ -82,20 +82,20 @@ class Test
         var a = new FloatNonAlignedFieldWithSmallOffset(1);
         Debug.Assert(a.field == 1);
         Console.WriteLine(a.field);
-        var b = new FloatNonAlignedFieldWithLargeOffset(1);
-        Debug.Assert(b.field == 1);
-        Console.WriteLine(b.field);
+        // var b = new FloatNonAlignedFieldWithLargeOffset(1);
+        // Debug.Assert(b.field == 1);
+        // Console.WriteLine(b.field);
 
-        var c = new DoubleNonAlignedFieldWithSmallOffset(1);
-        Debug.Assert(c.field == 1);
-        Console.WriteLine(c.field);
-        var d = new DoubleNonAlignedFieldWithLargeOffset(1);
-        Debug.Assert(d.field == 1);
-        Console.WriteLine(d.field);
+        // var c = new DoubleNonAlignedFieldWithSmallOffset(1);
+        // Debug.Assert(c.field == 1);
+        // Console.WriteLine(c.field);
+        // var d = new DoubleNonAlignedFieldWithLargeOffset(1);
+        // Debug.Assert(d.field == 1);
+        // Console.WriteLine(d.field);
         
-        var e = new StructNonAlignedField(1);
-        Debug.Assert(e.field.field == 1);
-        Console.WriteLine(e.field.field);
+        // var e = new StructNonAlignedField(1);
+        // Debug.Assert(e.field.field == 1);
+        // Console.WriteLine(e.field.field);
 
         return 100;
     }
