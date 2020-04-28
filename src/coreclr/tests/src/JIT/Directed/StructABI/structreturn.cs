@@ -5,9 +5,10 @@
 // Test register struct returns and local vars retyping cases.
 
 using System;
+using System.Numerics;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using System.Numerics;
+using System.Runtime.InteropServices;
 
 #region Test struct return optimizations.
 class TestStructReturns
@@ -507,10 +508,10 @@ class TestUnsafeCasts
     [MethodImpl(MethodImplOptions.NoInlining)]
     static void PrimFromSameSizePrim()
     {
-        //PrimFromSameSizePrim1();
-        //PrimFromSameSizePrim2();
-        //PrimFromSameSizePrim3();
-        //PrimFromSameSizePrim4();
+        PrimFromSameSizePrim1();
+        PrimFromSameSizePrim2();
+        PrimFromSameSizePrim3();
+        PrimFromSameSizePrim4();
         PrimFromSameSizePrim5();
         PrimFromSameSizePrim6();
         PrimFromSameSizePrim7();
@@ -554,11 +555,11 @@ class TestUnsafeCasts
     [MethodImpl(MethodImplOptions.NoInlining)]
     static unsafe void PrimFromSStruct()
     {
-        smallStruct s;
-        s.a = false;
-        s.b = true;
-        int v = Unsafe.As<smallStruct, int>(ref s);
-        Debug.Assert(v == 0x100);
+        smallStruct[] s = new smallStruct[2];
+        s[0].a = true;
+        s[0].b = false;
+        int v = Unsafe.As<smallStruct, int>(ref s[0]);
+        Debug.Assert(v != 0);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -587,8 +588,8 @@ class TestUnsafeCasts
     [MethodImpl(MethodImplOptions.NoInlining)]
     static unsafe void StructFromSPrim()
     {
-        byte v = 1;
-        smallStruct s = Unsafe.As<byte, smallStruct>(ref v);
+        byte[] v = new byte[8] { 1, 0, 0, 0, 0, 0, 0, 0 };
+        smallStruct s = Unsafe.As<byte, smallStruct>(ref v[0]);
         Debug.Assert(s.a == true && s.b == false);
     }
 
@@ -611,32 +612,30 @@ class TestUnsafeCasts
     [MethodImpl(MethodImplOptions.NoInlining)]
     static unsafe void StructFromSStruct1()
     {
-        smallStruct smallS;
-        smallS.a = true;
-        smallS.b = false;
-        eightByteStruct largeS = Unsafe.As<smallStruct, eightByteStruct>(ref smallS);
+        smallStruct[] smallS = new smallStruct[4];
+        smallS[0].a = true;
+        smallS[0].b = false;
+        eightByteStruct largeS = Unsafe.As<smallStruct, eightByteStruct>(ref smallS[0]);
         Debug.Assert((uint)(largeS.a % (UInt32.MaxValue + 1L)) == 1);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     static unsafe void StructFromSStruct2()
     {
-        // https://github.com/dotnet/runtime/issues/34576
-        // smallStruct smallS;
-        // smallS.a = true;
-        // smallS.b = false;
-        // largeStruct largeS = Unsafe.As<smallStruct, largeStruct>(ref smallS);
-        // Debug.Assert((uint)(largeS.a % (UInt32.MaxValue + 1L)) == 1);
+        smallStruct[] smallS = new smallStruct[8];
+        smallS[0].a = true;
+        smallS[0].b = false;
+        largeStruct largeS = Unsafe.As<smallStruct, largeStruct>(ref smallS[0]);
+        Debug.Assert((uint)(largeS.a % (UInt32.MaxValue + 1L)) == 1);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     static unsafe void StructFromSStruct3()
     {
-        // https://github.com/dotnet/runtime/issues/34576
-        // eightByteStruct smallS;
-        // smallS.a = 1000;
-        // largeStruct largeS = Unsafe.As<eightByteStruct, largeStruct>(ref smallS);
-        // Debug.Assert(largeS.a == 1000);
+        eightByteStruct[] smallS = new eightByteStruct[2];
+        smallS[0].a = 1000;
+        largeStruct largeS = Unsafe.As<eightByteStruct, largeStruct>(ref smallS[0]);
+        Debug.Assert(largeS.a == 1000);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -818,12 +817,123 @@ class TestUnsafeCasts
 
 #endregion
 
+#region Test merge return blocks
+class TestMergeReturnBlocks
+{
+    struct ReturnStruct
+    {
+        public float a;
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public ReturnStruct(int a)
+        {
+            this.a = a;
+        }
+    }
+
+    static ReturnStruct TestConstPropogation(int a)
+    {
+        if (a == 0)
+        {
+            ReturnStruct s = new ReturnStruct(); // ASG(a, 0);
+            return s;
+        }
+        else if (a == 1)
+        {
+            ReturnStruct s = new ReturnStruct(1);
+            return s;
+        }
+        else if (a == 2)
+        {
+            ReturnStruct s;
+            s.a = 2;
+            return s;
+        }
+        else if (a == 3)
+        {
+            ReturnStruct s = new ReturnStruct(3);
+            ReturnStruct s2 = s;
+            ReturnStruct s3 = s2;
+            return s3;
+        }
+        return new ReturnStruct(4);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static void TestConstPropogation()
+    {
+        TestConstPropogation(5);
+    }
+
+
+    [StructLayout(LayoutKind.Explicit, Pack = 1)]
+    struct StructWithOverlaps
+    {
+        [FieldOffset(0)]
+        public int val;
+        [FieldOffset(0)]
+        public ReturnStruct s;
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public StructWithOverlaps(int v)
+        {
+            val = 0;
+            s.a = v;
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static ReturnStruct TestNoFieldSeqPropogation(int a)
+    {
+        StructWithOverlaps s = new StructWithOverlaps();
+        if (a == 0)
+        {
+            return new ReturnStruct();
+        }
+        else if (a == 1)
+        {
+            return s.s;
+        }
+        else if (a == 2)
+        {
+            StructWithOverlaps s2 = new StructWithOverlaps(2);
+            return s2.s;
+        }
+        else if (a == 3)
+        {
+            StructWithOverlaps s3 = new StructWithOverlaps(3);
+            return s3.s;
+        }
+        else
+        {
+            StructWithOverlaps s4 = new StructWithOverlaps(4);
+            return s4.s;
+        }
+
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static void TestNoFieldSeqPropogation()
+    {
+        TestNoFieldSeqPropogation(5);
+    }
+
+
+    public static void Test()
+    {
+        TestConstPropogation();
+        TestNoFieldSeqPropogation();
+    }
+}
+#endregion
+
 class TestStructs
 {
     public static int Main()
     {
         TestStructReturns.Test();
         TestUnsafeCasts.Test();
+        TestMergeReturnBlocks.Test();
         return 100;
     }
 }

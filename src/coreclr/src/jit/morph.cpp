@@ -7582,7 +7582,7 @@ GenTree* Compiler::fgMorphPotentialTailCall(GenTreeCall* call)
             }
             assert((callType != TYP_UNKNOWN) && !varTypeIsStruct(callType));
             callType = genActualType(callType);
-            
+
             GenTree* zero = gtNewZeroConNode(callType);
             result        = fgMorphTree(zero);
         }
