@@ -1711,6 +1711,11 @@ void MethodContext::dmpGetClassSize(DWORDLONG key, DWORD val)
 unsigned MethodContext::repGetClassSize(CORINFO_CLASS_HANDLE cls)
 {
     AssertCodeMsg(GetClassSize != nullptr, EXCEPTIONCODE_MC, "Didn't find %016llX", (DWORDLONG)cls);
+    int index = GetClassSize->GetIndex((DWORDLONG)cls);
+    if (index == -1)
+    {
+        return 0;
+    }
     AssertCodeMsg(GetClassSize->GetIndex((DWORDLONG)cls) != -1, EXCEPTIONCODE_MC, "Didn't find %016llX",
                   (DWORDLONG)cls);
     unsigned result = (unsigned)GetClassSize->Get((DWORDLONG)cls);
@@ -4402,17 +4407,23 @@ void MethodContext::dmpGetFieldName(DWORDLONG key, DD value)
 }
 const char* MethodContext::repGetFieldName(CORINFO_FIELD_HANDLE ftn, const char** moduleName)
 {
-    DD value;
-    if (GetFieldName == nullptr)
+
+    if (GetFieldName != nullptr)
     {
-        if (moduleName != nullptr)
-            *moduleName = "hackishModuleName";
-        return "hackishFieldName";
+        int index = GetFieldName->GetIndex((DWORDLONG)ftn);
+        if (index != -1)
+        {
+            DD value = GetFieldName->GetItem(index);
+            if (moduleName != nullptr)
+                *moduleName = (const char*)GetFieldName->GetBuffer(value.B);
+            return (const char*)GetFieldName->GetBuffer(value.A);
+        }
     }
-    value = GetFieldName->Get((DWORDLONG)ftn);
+
     if (moduleName != nullptr)
-        *moduleName = (const char*)GetFieldName->GetBuffer(value.B);
-    return (const char*)GetFieldName->GetBuffer(value.A);
+        *moduleName = "hackishModuleName";
+    return "hackishFieldName";
+
 }
 
 void MethodContext::recCanInlineTypeCheck(CORINFO_CLASS_HANDLE         cls,
