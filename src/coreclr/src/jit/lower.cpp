@@ -3224,16 +3224,21 @@ void Lowering::LowerRetStructLclVar(GenTreeUnOp* ret)
 // Arguments:
 //     call - The call node to lower.
 //
-// Note: it transforms the call's user.
+// Note: it transforms the call's user, it skips multiReg return.
 //
 void Lowering::LowerCallStruct(GenTreeCall* call)
 {
+    if (call->HasMultiRegRetVal())
+    {
+        return;
+    }
+
     assert(!comp->compDoOldStructRetyping());
     CORINFO_CLASS_HANDLE        retClsHnd = call->gtRetClsHnd;
     Compiler::structPassingKind howToReturnStruct;
     var_types                   returnType = comp->getReturnTypeForStruct(retClsHnd, &howToReturnStruct);
     assert(!varTypeIsStruct(returnType) && returnType != TYP_UNKNOWN);
-    call->gtType = genActualType(returnType); // the callee normalizes small return types.
+    call->gtType = genActualType(returnType);
 
     LIR::Use callUse;
     if (BlockRange().TryGetUse(call, &callUse))
@@ -3242,22 +3247,59 @@ void Lowering::LowerCallStruct(GenTreeCall* call)
         switch (user->OperGet())
         {
             case GT_RETURN:
-            case GT_STORE_LCL_VAR:
                 // Leave as is, the user will handle it.
                 break;
+
+            case GT_STORE_LCL_VAR:
+            {
+                GenTreeLclVar* lclVar = user->AsLclVar();
+                LclVarDsc*     varDsc = comp->lvaGetDesc(lclVar);
+                if (varDsc->lvExactSize == genTypeSize(returnType))
+                {
+                    assert(varDsc->GetLayout()->GetRegisterType() != TYP_UNDEF);
+                }
+                else
+                {
+#if defined(WINDOWS_AMD64_ABI)
+                    unreached();
+#else  // !WINDOWS_AMD64_ABI
+                    GenTreeLclVar* spilledCall = SpillStructCallResult(call);
+                    callUse.ReplaceWith(comp, spilledCall);
+#endif // WINDOWS_AMD64_ABI
+                }
+                break;
+            }
 
             case GT_STORE_BLK:
             case GT_STORE_OBJ:
             {
                 GenTreeBlk* storeBlk = user->AsBlk();
-#ifdef DEBUG
+
                 unsigned storeSize = storeBlk->GetLayout()->GetSize();
-                assert(storeSize == genTypeSize(returnType));
-#endif // DEBUG
-                // For `STORE_BLK<2>(dst, call struct<2>)` we will have call retyped as `int`,
-                // but `STORE` has to use the unwidened type.
-                user->ChangeType(returnType);
-                user->SetOper(GT_STOREIND);
+                if (storeSize == genTypeSize(returnType))
+                {
+                    // For `STORE_BLK<1,2>(dst, call struct<1,2>)` we will have call retyped as `int`,
+                    // but `STORE` has to use the unwidened type.
+                    user->ChangeType(returnType);
+                    user->SetOper(GT_STOREIND);
+                }
+                else
+                {
+#if defined(WINDOWS_AMD64_ABI)
+                    // All ABI except Windows x64 supports passing 3 byte structs in registers.
+                    // Other 64 bites ABI-s support passing 3, 6, 7 byte structs.
+                    unreached();
+#else  // !WINDOWS_AMD64_ABI
+                    if (storeBlk->OperIs(GT_STORE_OBJ))
+                    {
+                        storeBlk->SetOper(GT_STORE_BLK);
+                    }
+                    storeBlk->gtBlkOpKind = GenTreeObj::BlkOpKindUnroll;
+
+                    GenTreeLclVar* spilledCall = SpillStructCallResult(call);
+                    callUse.ReplaceWith(comp, spilledCall);
+#endif // WINDOWS_AMD64_ABI
+                }
             }
             break;
 
@@ -3276,6 +3318,36 @@ void Lowering::LowerCallStruct(GenTreeCall* call)
         }
     }
 }
+
+#if !defined(WINDOWS_AMD64_ABI)
+//----------------------------------------------------------------------------------------------
+// SpillStructCallResult: Spill call result to memory.
+//
+// Arguments:
+//     call - call with 3, 5, 6 or 7 return size that has to be spilled to memory.
+//
+// Return Value:
+//    load of the spilled variable.
+//
+GenTreeLclVar* Lowering::SpillStructCallResult(GenTreeCall* call) const
+{
+    // TODO-1stClassStructs: we can support that in codegen for `GT_STORE_BLK` without new temps.
+    const unsigned       callResAsTmp = comp->lvaGrabTemp(true DEBUGARG("Return value temp for small struct return"));
+    CORINFO_CLASS_HANDLE retClsHnd    = call->gtRetClsHnd;
+    comp->lvaSetStruct(callResAsTmp, retClsHnd, false);
+    GenTreeLclFld* storeCallResult =
+        new (comp, GT_STORE_LCL_FLD) GenTreeLclFld(GT_STORE_LCL_FLD, call->gtType, callResAsTmp, 0);
+    storeCallResult->gtOp1 = call;
+    storeCallResult->gtFlags |= GTF_VAR_DEF;
+    // TODO: it is not nice to use `InsertAfter` before `after` is lowered,
+    // but it is the easiest solution for now.
+    BlockRange().InsertAfter(call, storeCallResult);
+    GenTreeLclVar* spilledCall = comp->gtNewLclvNode(callResAsTmp, TYP_STRUCT)->AsLclVar();
+    BlockRange().InsertAfter(storeCallResult, spilledCall);
+
+    return spilledCall;
+}
+#endif // !WINDOWS_AMD64_ABI
 
 GenTree* Lowering::LowerDirectCall(GenTreeCall* call)
 {
