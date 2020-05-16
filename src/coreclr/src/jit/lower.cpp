@@ -255,6 +255,13 @@ GenTree* Lowering::LowerNode(GenTree* node)
 
         case GT_STORE_BLK:
         case GT_STORE_OBJ:
+            if (node->AsBlk()->Data()->IsCall())
+            {
+                assert(!comp->compDoOldStructRetyping());
+                LowerStructBlockStore(node->AsBlk());
+                break;
+            }
+            __fallthrough;
         case GT_STORE_DYN_BLK:
             LowerBlockStore(node->AsBlk());
             break;
@@ -2986,11 +2993,12 @@ void Lowering::LowerRet(GenTreeUnOp* ret)
 void Lowering::LowerStoreLoc2(GenTreeLclVarCommon* lclStore)
 {
     assert(lclStore->OperIs(GT_STORE_LCL_FLD, GT_STORE_LCL_VAR));
-    GenTree* src = lclStore->gtGetOp1();
+    GenTree*   src    = lclStore->gtGetOp1();
+    LclVarDsc* varDsc = comp->lvaGetDesc(lclStore);
     if ((varTypeUsesFloatReg(lclStore) != varTypeUsesFloatReg(src)) && !lclStore->IsPhiDefn() &&
         (src->TypeGet() != TYP_STRUCT))
     {
-        if (m_lsra->isRegCandidate(comp->lvaGetDesc(lclStore->GetLclNum())))
+        if (m_lsra->isRegCandidate(varDsc))
         {
             GenTreeUnOp* bitcast = new (comp, GT_BITCAST) GenTreeOp(GT_BITCAST, lclStore->TypeGet(), src, nullptr);
             lclStore->gtOp1      = bitcast;
@@ -3007,13 +3015,14 @@ void Lowering::LowerStoreLoc2(GenTreeLclVarCommon* lclStore)
 
     if ((lclStore->TypeGet() == TYP_STRUCT) && (src->OperGet() != GT_PHI))
     {
-        LclVarDsc* varDsc = comp->lvaGetDesc(lclStore);
         if (src->OperGet() == GT_CALL)
         {
+            GenTreeCall*       call    = src->AsCall();
+            const ClassLayout* layout  = varDsc->GetLayout();
+            const var_types    regType = layout->GetRegisterType();
+
 #ifdef DEBUG
-            const ClassLayout* layout    = varDsc->GetLayout();
-            const unsigned     slotCount = layout->GetSlotCount();
-            const var_types    regType   = layout->GetRegisterType();
+            const unsigned slotCount = layout->GetSlotCount();
 #if defined(TARGET_XARCH) && !defined(UNIX_AMD64_ABI)
             // Windows x64 doesn't have multireg returns,
             // x86 uses it only for long return type, not for structs.
@@ -3025,16 +3034,44 @@ void Lowering::LowerStoreLoc2(GenTreeLclVarCommon* lclStore)
             {
                 if (slotCount > 1)
                 {
-                    assert(src->AsCall()->HasMultiRegRetVal());
+                    assert(call->HasMultiRegRetVal());
                 }
                 else
                 {
                     assert(!comp->compDoOldStructRetyping());
-                    assert(regType != TYP_UNDEF);
+                    switch (layout->GetSize())
+                    {
+                        case 1:
+                        case 2:
+                        case 4:
+                        case 8:
+                        case 16:
+                            assert(regType != TYP_UNDEF);
+                            break;
+                        case 3:
+                        case 5:
+                        case 6:
+                        case 7:
+                            assert(regType == TYP_UNDEF);
+                            break;
+                        default:
+                            unreached();
+                    }
                 }
             }
 #endif // !TARGET_XARCH || UNIX_AMD64_ABI
 #endif // DEBUG
+
+#if !defined(WINDOWS_AMD64_ABI)
+            if (!call->HasMultiRegRetVal() && (regType == TYP_UNDEF))
+            {
+                GenTreeLclVar* spilledCall = SpillStructCallResult(call);
+                lclStore->gtOp1            = spilledCall;
+                src                        = lclStore->gtOp1;
+                LowerStoreLoc2(lclStore);
+                return;
+            }
+#endif // !WINDOWS_AMD64_ABI
         }
         else if (!src->OperIs(GT_LCL_VAR) || varDsc->GetLayout()->GetRegisterType() == TYP_UNDEF)
         {
@@ -3231,17 +3268,26 @@ void Lowering::LowerRetStructLclVar(GenTreeUnOp* ret)
 //
 void Lowering::LowerCallStruct(GenTreeCall* call)
 {
+    assert(varTypeIsStruct(call));
     if (call->HasMultiRegRetVal())
     {
         return;
     }
+
+#ifdef TARGET_ARMARCH
+    // !compDoOldStructRetyping is not supported on arm yet,
+    // because of HFA.
+    assert(comp->compDoOldStructRetyping());
+    return;
+#else // !TARGET_ARMARCH
 
     assert(!comp->compDoOldStructRetyping());
     CORINFO_CLASS_HANDLE        retClsHnd = call->gtRetClsHnd;
     Compiler::structPassingKind howToReturnStruct;
     var_types                   returnType = comp->getReturnTypeForStruct(retClsHnd, &howToReturnStruct);
     assert(!varTypeIsStruct(returnType) && returnType != TYP_UNKNOWN);
-    call->gtType = genActualType(returnType);
+    var_types origType = call->TypeGet();
+    call->gtType       = genActualType(returnType);
 
     LIR::Use callUse;
     if (BlockRange().TryGetUse(call, &callUse))
@@ -3250,75 +3296,70 @@ void Lowering::LowerCallStruct(GenTreeCall* call)
         switch (user->OperGet())
         {
             case GT_RETURN:
-                // Leave as is, the user will handle it.
-                break;
-
             case GT_STORE_LCL_VAR:
-            {
-                GenTreeLclVar* lclVar = user->AsLclVar();
-                LclVarDsc*     varDsc = comp->lvaGetDesc(lclVar);
-                if (varDsc->lvExactSize == genTypeSize(returnType))
-                {
-                    assert(varDsc->GetLayout()->GetRegisterType() != TYP_UNDEF);
-                }
-                else
-                {
-#if defined(WINDOWS_AMD64_ABI)
-                    unreached();
-#else  // !WINDOWS_AMD64_ABI
-                    GenTreeLclVar* spilledCall = SpillStructCallResult(call);
-                    callUse.ReplaceWith(comp, spilledCall);
-#endif // WINDOWS_AMD64_ABI
-                }
-                break;
-            }
-
             case GT_STORE_BLK:
             case GT_STORE_OBJ:
-            {
-                GenTreeBlk* storeBlk = user->AsBlk();
-
-                unsigned storeSize = storeBlk->GetLayout()->GetSize();
-                if (storeSize == genTypeSize(returnType))
-                {
-                    // For `STORE_BLK<1,2>(dst, call struct<1,2>)` we will have call retyped as `int`,
-                    // but `STORE` has to use the unwidened type.
-                    user->ChangeType(returnType);
-                    user->SetOper(GT_STOREIND);
-                }
-                else
-                {
-#if defined(WINDOWS_AMD64_ABI)
-                    // All ABI except Windows x64 supports passing 3 byte structs in registers.
-                    // Other 64 bites ABI-s support passing 3, 6, 7 byte structs.
-                    unreached();
-#else  // !WINDOWS_AMD64_ABI
-                    if (storeBlk->OperIs(GT_STORE_OBJ))
-                    {
-                        storeBlk->SetOper(GT_STORE_BLK);
-                    }
-                    storeBlk->gtBlkOpKind = GenTreeObj::BlkOpKindUnroll;
-
-                    GenTreeLclVar* spilledCall = SpillStructCallResult(call);
-                    callUse.ReplaceWith(comp, spilledCall);
-#endif // WINDOWS_AMD64_ABI
-                }
-            }
-            break;
+                // Leave as is, the user will handle it.
+                assert(user->TypeIs(origType));
+                break;
 
             case GT_STOREIND:
 #ifdef FEATURE_SIMD
-                assert(user->TypeIs(TYP_SIMD8, TYP_REF));
-#else  // !FEATURE_SIMD
+                if (user->TypeIs(TYP_SIMD8))
+                {
+                    user->ChangeType(returnType);
+                    break;
+                }
+#endif // FEATURE_SIMD
+                // importer has a separate mechanism to retype calls to helpers,
+                // keep it for now.
                 assert(user->TypeIs(TYP_REF));
-#endif // !FEATURE_SIMD
-
-                user->ChangeType(returnType);
+                assert(call->IsHelperCall());
+                assert(returnType == user->TypeGet());
                 break;
 
             default:
                 unreached();
         }
+    }
+#endif // !TARGET_ARMARCH
+}
+
+void Lowering::LowerStructBlockStore(GenTreeBlk* store)
+{
+    assert(!comp->compDoOldStructRetyping());
+    assert(varTypeIsStruct(store));
+    assert(store->Data()->IsCall());
+    GenTreeCall* call = store->Data()->AsCall();
+
+    const ClassLayout* layout = store->GetLayout();
+    assert(layout->GetSlotCount() == 1);
+    const var_types regType = layout->GetRegisterType();
+
+    unsigned storeSize = store->GetLayout()->GetSize();
+    if (regType != TYP_UNDEF)
+    {
+        store->ChangeType(regType);
+        store->SetOper(GT_STOREIND);
+        LowerStoreIndir(store->AsIndir());
+    }
+    else
+    {
+#if defined(WINDOWS_AMD64_ABI)
+        // All ABI except Windows x64 supports passing 3 byte structs in registers.
+        // Other 64 bites ABI-s support passing 5, 6, 7 byte structs.
+        unreached();
+#else  // !WINDOWS_AMD64_ABI
+        if (store->OperIs(GT_STORE_OBJ))
+        {
+            store->SetOper(GT_STORE_BLK);
+        }
+        store->gtBlkOpKind = GenTreeObj::BlkOpKindUnroll;
+
+        GenTreeLclVar* spilledCall = SpillStructCallResult(call);
+        store->SetData(spilledCall);
+        LowerBlockStore(store);
+#endif // WINDOWS_AMD64_ABI
     }
 }
 
@@ -3335,20 +3376,18 @@ void Lowering::LowerCallStruct(GenTreeCall* call)
 GenTreeLclVar* Lowering::SpillStructCallResult(GenTreeCall* call) const
 {
     // TODO-1stClassStructs: we can support that in codegen for `GT_STORE_BLK` without new temps.
-    const unsigned       callResAsTmp = comp->lvaGrabTemp(true DEBUGARG("Return value temp for small struct return"));
-    CORINFO_CLASS_HANDLE retClsHnd    = call->gtRetClsHnd;
-    comp->lvaSetStruct(callResAsTmp, retClsHnd, false);
-    GenTreeLclFld* storeCallResult =
-        new (comp, GT_STORE_LCL_FLD) GenTreeLclFld(GT_STORE_LCL_FLD, call->gtType, callResAsTmp, 0);
-    storeCallResult->gtOp1 = call;
-    storeCallResult->gtFlags |= GTF_VAR_DEF;
-    // TODO: it is not nice to use `InsertAfter` before `after` is lowered,
-    // but it is the easiest solution for now.
-    BlockRange().InsertAfter(call, storeCallResult);
-    GenTreeLclVar* spilledCall = comp->gtNewLclvNode(callResAsTmp, TYP_STRUCT)->AsLclVar();
-    BlockRange().InsertAfter(storeCallResult, spilledCall);
+    const unsigned       spillNum = comp->lvaGrabTemp(true DEBUGARG("Return value temp for an odd struct return size"));
+    CORINFO_CLASS_HANDLE retClsHnd = call->gtRetClsHnd;
+    comp->lvaSetStruct(spillNum, retClsHnd, false);
+    GenTreeLclFld* spill = new (comp, GT_STORE_LCL_FLD) GenTreeLclFld(GT_STORE_LCL_FLD, call->gtType, spillNum, 0);
+    spill->gtOp1         = call;
+    spill->gtFlags |= GTF_VAR_DEF;
 
-    return spilledCall;
+    BlockRange().InsertAfter(call, spill);
+    ContainCheckStoreLoc(spill);
+    GenTreeLclVar* loadCallResult = comp->gtNewLclvNode(spillNum, TYP_STRUCT)->AsLclVar();
+    BlockRange().InsertAfter(spill, loadCallResult);
+    return loadCallResult;
 }
 #endif // !WINDOWS_AMD64_ABI
 

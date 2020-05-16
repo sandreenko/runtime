@@ -136,6 +136,7 @@ private:
     void LowerRetStruct(GenTreeUnOp* ret);
     void LowerRetStructLclVar(GenTreeUnOp* ret);
     void LowerCallStruct(GenTreeCall* call);
+    void LowerStructBlockStore(GenTreeBlk* store);
 #if !defined(WINDOWS_AMD64_ABI)
     GenTreeLclVar* SpillStructCallResult(GenTreeCall* call) const;
 #endif // WINDOWS_AMD64_ABI
