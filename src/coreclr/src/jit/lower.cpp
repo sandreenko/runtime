@@ -2975,9 +2975,8 @@ void Lowering::LowerRet(GenTreeUnOp* ret)
             }
         }
 #endif // DEBUG
-        if (varTypeIsStruct(ret) && !comp->compMethodReturnsMultiRegRetType())
+        if (varTypeIsStruct(ret))
         {
-            assert(!comp->compDoOldStructRetyping());
             LowerRetStruct(ret);
         }
     }
@@ -3103,7 +3102,10 @@ void Lowering::LowerStoreLocCommon(GenTreeLclVarCommon* lclStore)
 //
 void Lowering::LowerRetStruct(GenTreeUnOp* ret)
 {
-    assert(!comp->compMethodReturnsMultiRegRetType());
+    if (comp->compMethodReturnsMultiRegRetType())
+    {
+        return;
+    }
     assert(!comp->compDoOldStructRetyping());
     assert(ret->OperIs(GT_RETURN));
     assert(varTypeIsStruct(ret));
