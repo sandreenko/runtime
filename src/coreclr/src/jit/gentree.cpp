@@ -15152,6 +15152,11 @@ GenTree* Compiler::gtNewTempAssign(
             assert(tmp == genReturnLocal);
             ok = true;
         }
+        else if (varTypeIsSIMD(dstTyp) && (valTyp == TYP_STRUCT))
+        {
+            assert(val->IsCall());
+            ok = true;
+        }
 
         if (!ok)
         {
