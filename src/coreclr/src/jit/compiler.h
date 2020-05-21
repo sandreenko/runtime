@@ -9154,7 +9154,42 @@ public:
 #if defined(TARGET_X86)
         // On x86 only 64-bit longs are returned in multiple registers
         return varTypeIsLong(info.compRetNativeType);
-#else  // targets: X64-UNIX, ARM64 or ARM32
+#else // targets: X64-UNIX, ARM64 or ARM32
+#if defined(TARGET_ARM64)
+        // TYP_SIMD16 is returned in one register, but JIT expects `true` from this function, #36868.
+        //if (info.compRetNativeType == TYP_SIMD16)
+        //{
+        //    return false;
+        //}
+#endif
+        // On all other targets that support multireg return values:
+        // Methods returning a struct in multiple registers have a return value of TYP_STRUCT.
+        // Such method's compRetNativeType is TYP_STRUCT without a hidden RetBufArg
+        return varTypeIsStruct(info.compRetNativeType) && (info.compRetBuffArg == BAD_VAR_NUM);
+#endif // TARGET_XXX
+
+#else // not FEATURE_MULTIREG_RET
+
+        // For this architecture there are no multireg returns
+        return false;
+
+#endif // FEATURE_MULTIREG_RET
+    }
+
+    bool compMethodReturnsResInMultiplyRegisters()
+    {
+#if FEATURE_MULTIREG_RET
+#if defined(TARGET_X86)
+        // On x86 only 64-bit longs are returned in multiple registers
+        return varTypeIsLong(info.compRetNativeType);
+#else // targets: X64-UNIX, ARM64 or ARM32
+#if defined(TARGET_ARM64)
+        // TYP_SIMD16 is returned in one register.
+        if (info.compRetNativeType == TYP_SIMD16)
+        {
+            return false;
+        }
+#endif
         // On all other targets that support multireg return values:
         // Methods returning a struct in multiple registers have a return value of TYP_STRUCT.
         // Such method's compRetNativeType is TYP_STRUCT without a hidden RetBufArg

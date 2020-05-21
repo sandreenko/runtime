@@ -3102,10 +3102,29 @@ void Lowering::LowerStoreLocCommon(GenTreeLclVarCommon* lclStore)
 //
 void Lowering::LowerRetStruct(GenTreeUnOp* ret)
 {
-    if (comp->compMethodReturnsMultiRegRetType())
+#if defined(FEATURE_HFA) && defined(TARGET_ARM64)
+    if (ret->TypeIs(TYP_SIMD16))
+    {
+        if (comp->info.compRetNativeType == TYP_STRUCT)
+        {
+            assert(!comp->compDoOldStructRetyping());
+            assert(ret->gtGetOp1()->TypeIs(TYP_SIMD16));
+            assert(comp->compMethodReturnsResInMultiplyRegisters());
+            ret->ChangeType(comp->info.compRetNativeType);
+        }
+        else
+        {
+            assert(comp->info.compRetNativeType == TYP_SIMD16);
+            return;
+        }
+    }
+#endif
+
+    if (comp->compMethodReturnsResInMultiplyRegisters())
     {
         return;
     }
+
     assert(!comp->compDoOldStructRetyping());
     assert(ret->OperIs(GT_RETURN));
     assert(varTypeIsStruct(ret));
@@ -3192,7 +3211,8 @@ void Lowering::LowerRetStruct(GenTreeUnOp* ret)
 //
 void Lowering::LowerRetStructLclVar(GenTreeUnOp* ret)
 {
-    assert(!comp->compMethodReturnsMultiRegRetType());
+
+    assert(!comp->compMethodReturnsResInMultiplyRegisters());
     assert(!comp->compDoOldStructRetyping());
     assert(ret->OperIs(GT_RETURN));
     GenTreeLclVarCommon* lclVar = ret->gtGetOp1()->AsLclVar();
@@ -3273,18 +3293,31 @@ void Lowering::LowerCallStruct(GenTreeCall* call)
         return;
     }
 
-#ifdef TARGET_ARMARCH
-    // !compDoOldStructRetyping is not supported on arm yet,
-    // because of HFA.
-    assert(comp->compDoOldStructRetyping());
-    return;
-#else // !TARGET_ARMARCH
+#if defined(FEATURE_HFA)
+    if (comp->IsHfa(call))
+    {
+#if defined(TARGET_ARM64)
+        assert(comp->GetHfaCount(call) == 1);
+#elif defined(TARGET_ARM)
+        // ARM returns double in 2 registers, but
+        // `call->HasMultiRegRetVal()` ignores that.
+        assert(comp->GetHfaCount(call) <= 2);
+#elif  // !TARGET_ARM64 && !TARGET_ARM
+        unreached();
+#endif // !TARGET_ARM64 && !TARGET_ARM
+        var_types hfaType = comp->GetHfaType(call);
+        if (call->TypeIs(hfaType))
+        {
+            return;
+        }
+    }
+#endif // FEATURE_HFA
 
     assert(!comp->compDoOldStructRetyping());
     CORINFO_CLASS_HANDLE        retClsHnd = call->gtRetClsHnd;
     Compiler::structPassingKind howToReturnStruct;
     var_types                   returnType = comp->getReturnTypeForStruct(retClsHnd, &howToReturnStruct);
-    assert(!varTypeIsStruct(returnType) && returnType != TYP_UNKNOWN);
+    assert(returnType != TYP_STRUCT && returnType != TYP_UNKNOWN);
     var_types origType = call->TypeGet();
     call->gtType       = genActualType(returnType);
 
@@ -3298,8 +3331,15 @@ void Lowering::LowerCallStruct(GenTreeCall* call)
             case GT_STORE_LCL_VAR:
             case GT_STORE_BLK:
             case GT_STORE_OBJ:
-                // Leave as is, the user will handle it.
+// Leave as is, the user will handle it.
+#ifdef TARGET_ARM64
+                // importer can do struct->SIMD16 retyping for us,
+                // see who calls `getReturnTypeForStruct`.
+                assert(user->TypeIs(origType) || varTypeIsSIMD(user->TypeGet()));
+#else  // !TARGET_ARM64
                 assert(user->TypeIs(origType));
+#endif // !TARGET_ARM64
+
                 break;
 
             case GT_STOREIND:
@@ -3317,11 +3357,32 @@ void Lowering::LowerCallStruct(GenTreeCall* call)
                 assert(returnType == user->TypeGet());
                 break;
 
+#if defined(TARGET_ARM64)
+            case GT_ADDR:
+            {
+                GenTreeUnOp* addr = user->AsUnOp();
+                // yep, address of a call that I have been fighting against for so long...
+                LIR::Use addrUse;
+                bool     foundAddrUse = BlockRange().TryGetUse(addr, &addrUse);
+                assert(foundAddrUse);
+                GenTree* ind = addrUse.User();
+                assert(ind->OperIs(GT_IND));
+                assert(varTypeIsSIMD(ind));
+                LIR::Use indUse;
+                if (BlockRange().TryGetUse(ind, &indUse))
+                {
+                    indUse.ReplaceWith(comp, call);
+                }
+                BlockRange().Remove(addr);
+                BlockRange().Remove(ind);
+                break;
+            }
+#endif // TARGET_ARM64
+
             default:
                 unreached();
         }
     }
-#endif // !TARGET_ARMARCH
 }
 
 //----------------------------------------------------------------------------------------------
