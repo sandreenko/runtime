@@ -1446,7 +1446,7 @@ GenTree* Compiler::impAssignStructPtr(GenTree*             destAddr,
             }
             if (src->OperIs(GT_CALL))
             {
-                lvaGetDesc(dest->AsLclVar()->GetLclNum())->lvIsMultiRegRet = true;
+                lvaGetDesc(dest->AsLclVar())->lvIsMultiRegRet = true;
             }
         }
         dest->gtType = asgType;
