@@ -9156,11 +9156,11 @@ public:
         return varTypeIsLong(info.compRetNativeType);
 #else // targets: X64-UNIX, ARM64 or ARM32
 #if defined(TARGET_ARM64)
-        // TYP_SIMD16 is returned in one register, but JIT expects `true` from this function, #36868.
-        //if (info.compRetNativeType == TYP_SIMD16)
-        //{
-        //    return false;
-        //}
+// TYP_SIMD16 is returned in one register, but JIT expects `true` from this function, #36868.
+// if (info.compRetNativeType == TYP_SIMD16)
+//{
+//    return false;
+//}
 #endif
         // On all other targets that support multireg return values:
         // Methods returning a struct in multiple registers have a return value of TYP_STRUCT.

@@ -3357,7 +3357,6 @@ void Lowering::LowerCallStruct(GenTreeCall* call)
                 assert(returnType == user->TypeGet());
                 break;
 
-#if defined(TARGET_ARM64)
             case GT_ADDR:
             {
                 GenTreeUnOp* addr = user->AsUnOp();
@@ -3366,18 +3365,25 @@ void Lowering::LowerCallStruct(GenTreeCall* call)
                 bool     foundAddrUse = BlockRange().TryGetUse(addr, &addrUse);
                 assert(foundAddrUse);
                 GenTree* ind = addrUse.User();
-                assert(ind->OperIs(GT_IND));
-                assert(varTypeIsSIMD(ind));
+                assert(ind->OperIs(GT_IND, GT_NULLCHECK));
                 LIR::Use indUse;
+                bool     callUnused;
                 if (BlockRange().TryGetUse(ind, &indUse))
                 {
+                    assert(ind->OperIs(GT_IND));
+                    assert(varTypeIsSIMD(ind));
                     indUse.ReplaceWith(comp, call);
+                    callUnused = false;
                 }
-                BlockRange().Remove(addr);
-                BlockRange().Remove(ind);
+                else
+                {
+                    assert(ind->OperIs(GT_NULLCHECK));
+                    callUnused = true;
+                }
+                BlockRange().Remove(ind, callUnused);
+                BlockRange().Remove(addr, callUnused);
                 break;
             }
-#endif // TARGET_ARM64
 
             default:
                 unreached();
