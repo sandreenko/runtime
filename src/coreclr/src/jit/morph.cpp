@@ -10243,8 +10243,7 @@ GenTree* Compiler::fgMorphBlockOperand(
         {
             if (indirTree->OperIsBlk() && !isBlkReqd)
             {
-                effectiveVal->SetOper(GT_IND);
-                effectiveVal->gtType = asgType;
+                indirTree->SetOper(GT_IND);
             }
             else
             {
