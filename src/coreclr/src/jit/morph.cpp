@@ -9277,7 +9277,7 @@ GenTree* Compiler::fgMorphOneAsgBlockOp(GenTree* tree)
             }
             if (isCopyBlock && destLclVarTree == nullptr && !src->OperIs(GT_LCL_VAR))
             {
-                fgMorphBlockOperand(src, asgType, genTypeSize(asgType), false /*isBlkReqd*/);
+                fgMorphBlockOperand(src, asgType, genTypeSize(asgType), false /*isBlkReqd*/, false);
                 return tree;
             }
         }
@@ -9588,13 +9588,13 @@ GenTree* Compiler::fgMorphOneAsgBlockOp(GenTree* tree)
         // Ensure that the dest is setup appropriately.
         if (dest->gtEffectiveVal()->OperIsIndir())
         {
-            dest = fgMorphBlockOperand(dest, asgType, size, false /*isBlkReqd*/);
+            dest = fgMorphBlockOperand(dest, asgType, size, false /*isBlkReqd*/, true);
         }
 
         // Ensure that the rhs is setup appropriately.
         if (isCopyBlock)
         {
-            src = fgMorphBlockOperand(src, asgType, size, false /*isBlkReqd*/);
+            src = fgMorphBlockOperand(src, asgType, size, false /*isBlkReqd*/, false);
         }
 
         // Set the lhs and rhs on the assignment.
@@ -9735,7 +9735,7 @@ GenTree* Compiler::fgMorphInitBlock(GenTree* tree)
         if (!destDoFldAsg)
         {
             // For an InitBlock we always require a block operand.
-            dest                = fgMorphBlockOperand(dest, dest->TypeGet(), blockSize, true /*isBlkReqd*/);
+            dest                = fgMorphBlockOperand(dest, dest->TypeGet(), blockSize, true /*isBlkReqd*/, true);
             tree->AsOp()->gtOp1 = dest;
             tree->gtFlags |= (dest->gtFlags & GTF_ALL_EFFECT);
         }
@@ -10167,7 +10167,8 @@ GenTree* Compiler::fgMorphBlkNode(GenTree* tree, bool isDest)
 //    Although 'tree' WAS an operand of a block assignment, the assignment
 //    may have been retyped to be a scalar assignment.
 
-GenTree* Compiler::fgMorphBlockOperand(GenTree* tree, var_types asgType, unsigned blockWidth, bool isBlkReqd)
+GenTree* Compiler::fgMorphBlockOperand(
+    GenTree* tree, var_types asgType, unsigned blockWidth, bool isBlkReqd, bool isDst)
 {
     GenTree* effectiveVal = tree->gtEffectiveVal();
 
@@ -10189,7 +10190,7 @@ GenTree* Compiler::fgMorphBlockOperand(GenTree* tree, var_types asgType, unsigne
             }
             effectiveVal->gtType = asgType;
         }
-        else if (effectiveVal->TypeGet() != asgType)
+        else if (!effectiveVal->TypeIs(asgType) && isDst)
         {
             GenTree* addr = gtNewOperNode(GT_ADDR, TYP_BYREF, effectiveVal);
             effectiveVal  = gtNewIndir(asgType, addr);
@@ -10199,7 +10200,7 @@ GenTree* Compiler::fgMorphBlockOperand(GenTree* tree, var_types asgType, unsigne
     {
         GenTreeIndir*        indirTree        = nullptr;
         GenTreeLclVarCommon* lclNode          = nullptr;
-        bool                 needsIndirection = true;
+        bool                 needsIndirection = isDst;
 
         if (effectiveVal->OperIsIndir())
         {
@@ -10216,12 +10217,7 @@ GenTree* Compiler::fgMorphBlockOperand(GenTree* tree, var_types asgType, unsigne
         }
         else if (effectiveVal->IsCall())
         {
-            needsIndirection = false;
-#ifdef DEBUG
-            GenTreeCall* call = effectiveVal->AsCall();
-            assert(call->TypeGet() == TYP_STRUCT);
-            assert(blockWidth == info.compCompHnd->getClassSize(call->gtRetClsHnd));
-#endif
+            assert(isDst && !needsIndirection);
         }
 
         if (lclNode != nullptr)
@@ -10242,44 +10238,43 @@ GenTree* Compiler::fgMorphBlockOperand(GenTree* tree, var_types asgType, unsigne
                 effectiveVal->gtFlags |= (lclNode->gtFlags & GTF_ALL_EFFECT);
             }
         }
-        if (needsIndirection)
+
+        if (indirTree != nullptr)
         {
-            if (indirTree != nullptr)
+            if (indirTree->OperIsBlk() && !isBlkReqd)
             {
-                if (indirTree->OperIsBlk() && !isBlkReqd)
+                effectiveVal->SetOper(GT_IND);
+                effectiveVal->gtType = asgType;
+            }
+            else
+            {
+                // If we have an indirection and a block is required, it should already be a block.
+                assert(indirTree->OperIsBlk() || !isBlkReqd);
+            }
+        }
+
+        if (needsIndirection && indirTree == nullptr)
+        {
+            GenTree* newTree;
+            GenTree* addr = gtNewOperNode(GT_ADDR, TYP_BYREF, effectiveVal);
+            if (isBlkReqd)
+            {
+                CORINFO_CLASS_HANDLE clsHnd = gtGetStructHandleIfPresent(effectiveVal);
+                if (clsHnd == NO_CLASS_HANDLE)
                 {
-                    effectiveVal->SetOper(GT_IND);
-                    effectiveVal->gtType = asgType;
+                    newTree = new (this, GT_BLK) GenTreeBlk(GT_BLK, TYP_STRUCT, addr, typGetBlkLayout(blockWidth));
                 }
                 else
                 {
-                    // If we have an indirection and a block is required, it should already be a block.
-                    assert(indirTree->OperIsBlk() || !isBlkReqd);
+                    newTree = gtNewObjNode(clsHnd, addr);
+                    gtSetObjGcInfo(newTree->AsObj());
                 }
             }
             else
             {
-                GenTree* newTree;
-                GenTree* addr = gtNewOperNode(GT_ADDR, TYP_BYREF, effectiveVal);
-                if (isBlkReqd)
-                {
-                    CORINFO_CLASS_HANDLE clsHnd = gtGetStructHandleIfPresent(effectiveVal);
-                    if (clsHnd == NO_CLASS_HANDLE)
-                    {
-                        newTree = new (this, GT_BLK) GenTreeBlk(GT_BLK, TYP_STRUCT, addr, typGetBlkLayout(blockWidth));
-                    }
-                    else
-                    {
-                        newTree = gtNewObjNode(clsHnd, addr);
-                        gtSetObjGcInfo(newTree->AsObj());
-                    }
-                }
-                else
-                {
-                    newTree = gtNewIndir(asgType, addr);
-                }
-                effectiveVal = newTree;
+                newTree = gtNewIndir(asgType, addr);
             }
+            effectiveVal = newTree;
         }
     }
     tree = effectiveVal;
@@ -10736,12 +10731,12 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
         if (requiresCopyBlock)
         {
             bool isBlkReqd     = (asgType == TYP_STRUCT);
-            dest               = fgMorphBlockOperand(dest, asgType, blockWidth, isBlkReqd);
+            dest               = fgMorphBlockOperand(dest, asgType, blockWidth, isBlkReqd, true);
             asg->AsOp()->gtOp1 = dest;
             asg->gtFlags |= (dest->gtFlags & GTF_ALL_EFFECT);
 
             // Eliminate the "OBJ or BLK" node on the src.
-            src                = fgMorphBlockOperand(src, asgType, blockWidth, false /*!isBlkReqd*/);
+            src                = fgMorphBlockOperand(src, asgType, blockWidth, false /*!isBlkReqd*/, false);
             asg->AsOp()->gtOp2 = src;
 
             goto _Done;
@@ -10772,7 +10767,7 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
         else if (destDoFldAsg)
         {
             fieldCnt = destLclVar->lvFieldCnt;
-            src      = fgMorphBlockOperand(src, asgType, blockWidth, false /*isBlkReqd*/);
+            src      = fgMorphBlockOperand(src, asgType, blockWidth, false /*isBlkReqd*/, false);
             if (srcAddr == nullptr)
             {
                 srcAddr = fgMorphGetStructAddr(&src, destLclVar->lvVerTypeInfo.GetClassHandle(), true /* rValue */);
@@ -10782,7 +10777,7 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
         {
             assert(srcDoFldAsg);
             fieldCnt = srcLclVar->lvFieldCnt;
-            dest     = fgMorphBlockOperand(dest, asgType, blockWidth, false /*isBlkReqd*/);
+            dest     = fgMorphBlockOperand(dest, asgType, blockWidth, false /*isBlkReqd*/, true);
             if (dest->OperIsBlk())
             {
                 dest->SetOper(GT_IND);
