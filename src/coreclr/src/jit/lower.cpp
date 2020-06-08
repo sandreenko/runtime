@@ -3066,6 +3066,24 @@ void Lowering::LowerStoreLocCommon(GenTreeLclVarCommon* lclStore)
                 return;
             }
 #endif // !WINDOWS_AMD64_ABI
+            if (varDsc->lvPromoted && !call->HasMultiRegRetVal() &&
+                (comp->lvaGetPromotionType(varDsc) == Compiler::PROMOTION_TYPE_INDEPENDENT))
+            {
+                assert(varDsc->lvFieldCnt == 1);
+                unsigned   fldNum = varDsc->lvFieldLclStart;
+                LclVarDsc* fldDsc = comp->lvaGetDesc(fldNum);
+                lclStore->SetLclNum(fldNum);
+                lclStore->ChangeType(fldDsc->TypeGet());
+
+                if (varTypeUsesFloatReg(lclStore) != varTypeUsesFloatReg(call))
+                {
+                    GenTreeUnOp* bitcast =
+                        new (comp, GT_BITCAST) GenTreeOp(GT_BITCAST, lclStore->TypeGet(), call, nullptr);
+                    lclStore->gtOp1 = bitcast;
+                    BlockRange().InsertBefore(lclStore, bitcast);
+                    ContainCheckBitCast(bitcast);
+                }
+            }
         }
         else if (!src->OperIs(GT_LCL_VAR) || varDsc->GetLayout()->GetRegisterType() == TYP_UNDEF)
         {
@@ -3162,8 +3180,11 @@ void Lowering::LowerRetStruct(GenTreeUnOp* ret)
         case GT_OBJ:
             retVal->ChangeOper(GT_IND);
             __fallthrough;
+
         case GT_IND:
             retVal->ChangeType(nativeReturnType);
+            TryCreateAddrMode(retVal->AsIndir()->Addr(), true);
+            ContainCheckIndir(retVal->AsIndir());
             break;
 
         case GT_LCL_VAR:

@@ -521,6 +521,29 @@ public:
                 PopValue();
                 break;
 
+            case GT_RETURN:
+                if (node->gtGetOp1() != nullptr)
+                {
+                    assert(TopValue(0).Node() == node->gtGetOp1());
+
+                    if (node->gtGetOp1()->OperIs(GT_LCL_VAR))
+                    {
+                        GenTreeLclVar* lclVar = node->gtGetOp1()->AsLclVar();
+                        LclVarDsc*     varDsc = m_compiler->lvaGetDesc(lclVar);
+                        if (varDsc->lvPromoted && (varDsc->lvFieldCnt > 1) && !varDsc->lvIsMultiRegArgOrRet())
+                        {
+                            // With `Use block init for a promoted struct that's been marked lvDoNotEnregister.`
+                            // changes it is better to set doNotEnreg earlier.
+                            m_compiler->lvaSetVarDoNotEnregister(lclVar->GetLclNum() DEBUGARG(Compiler::DNER_BlockOp));
+                        }
+                    }
+
+                    EscapeValue(TopValue(0), node);
+                    PopValue();
+                }
+                assert(TopValue(0).Node() == node);
+                break;
+
             default:
                 while (TopValue(0).Node() != node)
                 {

@@ -10341,6 +10341,17 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
     }
 #endif // FEATURE_MULTIREG_RET
 
+    if (src->IsCall() && dest->OperIs(GT_LCL_VAR))
+    {
+        LclVarDsc* varDsc = lvaGetDesc(dest->AsLclVar());
+        if (varDsc->lvPromoted && varDsc->lvFieldCnt == 1)
+        {
+            JITDUMP(" not morphing a single reg call return\n");
+            varDsc->lvIsMultiRegRet = true; // Set to exclude it from SSA.
+            return tree;
+        }
+    }
+
     // If we have an array index on the lhs, we need to create an obj node.
 
     dest = fgMorphBlkNode(dest, true);
@@ -10479,7 +10490,7 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
                 noway_assert(varTypeIsStruct(destLclVar));
                 noway_assert(!opts.MinOpts());
 
-                if (blockWidth == destLclVar->lvExactSize)
+                if ((blockWidth == destLclVar->lvExactSize) && !destLclVar->lvDoNotEnregister)
                 {
                     JITDUMP(" (destDoFldAsg=true)");
                     // We may decide later that a copyblk is required when this struct has holes
@@ -10527,7 +10538,7 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
                 noway_assert(varTypeIsStruct(srcLclVar));
                 noway_assert(!opts.MinOpts());
 
-                if (blockWidth == srcLclVar->lvExactSize)
+                if ((blockWidth == srcLclVar->lvExactSize) && !srcLclVar->lvDoNotEnregister)
                 {
                     JITDUMP(" (srcDoFldAsg=true)");
                     // We may decide later that a copyblk is required when this struct has holes
