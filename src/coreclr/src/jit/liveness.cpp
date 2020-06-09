@@ -1797,7 +1797,6 @@ void Compiler::fgComputeLifeLIR(VARSET_TP& life, BasicBlock* block, VARSET_VALAR
     {
         next = node->gtPrev;
 
-        bool isDeadStore;
         switch (node->OperGet())
         {
             case GT_CALL:
@@ -1887,7 +1886,7 @@ void Compiler::fgComputeLifeLIR(VARSET_TP& life, BasicBlock* block, VARSET_VALAR
                 }
                 else
                 {
-                    isDeadStore = fgComputeLifeLocal(life, keepAliveVars, node);
+                    bool isDeadStore = fgComputeLifeLocal(life, keepAliveVars, node);
                     if (isDeadStore)
                     {
                         LIR::Use addrUse;
@@ -1918,38 +1917,51 @@ void Compiler::fgComputeLifeLIR(VARSET_TP& life, BasicBlock* block, VARSET_VALAR
             {
                 GenTreeLclVarCommon* const lclVarNode = node->AsLclVarCommon();
 
-                LclVarDsc& varDsc = lvaTable[lclVarNode->GetLclNum()];
-                if (varDsc.lvTracked)
+                LclVarDsc& varDsc      = lvaTable[lclVarNode->GetLclNum()];
+                bool       isDeadStore = false;
+
+                if (varDsc.lvTracked && fgComputeLifeTrackedLocalDef(life, keepAliveVars, varDsc, lclVarNode))
                 {
-                    isDeadStore = fgComputeLifeTrackedLocalDef(life, keepAliveVars, varDsc, lclVarNode);
-                    if (isDeadStore)
+                    isDeadStore = true;
+                }
+                else if (varDsc.lvRefCnt() == 1)
+                {
+                    if (!opts.MinOpts())
                     {
-                        JITDUMP("Removing dead store:\n");
-                        DISPNODE(lclVarNode);
-
-                        // Remove the store. DCE will iteratively clean up any ununsed operands.
-                        lclVarNode->gtOp1->SetUnusedValue();
-
-                        // If the store is marked as a late argument, it is referenced by a call. Instead of removing
-                        // it, bash it to a NOP.
-                        if ((node->gtFlags & GTF_LATE_ARG) != 0)
+                        if (!varDsc.lvAddrExposed &&
+                            !(varDsc.lvIsStructField && lvaTable[varDsc.lvParentLcl].lvAddrExposed))
                         {
-                            JITDUMP("node is a late arg; replacing with NOP\n");
-                            node->gtBashToNOP();
-
-                            // NOTE: this is a bit of a hack. We need to keep these nodes around as they are
-                            // referenced by the call, but they're considered side-effect-free non-value-producing
-                            // nodes, so they will be removed if we don't do this.
-                            node->gtFlags |= GTF_ORDER_SIDEEFF;
+                            isDeadStore = true;
                         }
-                        else
-                        {
-                            blockRange.Remove(node);
-                        }
-
-                        assert(!opts.MinOpts());
-                        fgStmtRemoved = true;
                     }
+                }
+                if (isDeadStore)
+                {
+                    JITDUMP("Removing dead store:\n");
+                    DISPNODE(lclVarNode);
+
+                    // Remove the store. DCE will iteratively clean up any ununsed operands.
+                    lclVarNode->gtOp1->SetUnusedValue();
+
+                    // If the store is marked as a late argument, it is referenced by a call. Instead of removing
+                    // it, bash it to a NOP.
+                    if ((node->gtFlags & GTF_LATE_ARG) != 0)
+                    {
+                        JITDUMP("node is a late arg; replacing with NOP\n");
+                        node->gtBashToNOP();
+
+                        // NOTE: this is a bit of a hack. We need to keep these nodes around as they are
+                        // referenced by the call, but they're considered side-effect-free non-value-producing
+                        // nodes, so they will be removed if we don't do this.
+                        node->gtFlags |= GTF_ORDER_SIDEEFF;
+                    }
+                    else
+                    {
+                        blockRange.Remove(node);
+                    }
+
+                    assert(!opts.MinOpts());
+                    fgStmtRemoved = true;
                 }
                 else
                 {
