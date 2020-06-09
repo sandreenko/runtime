@@ -11095,6 +11095,13 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
                             srcFld                       = gtNewOperNode(GT_ADD, TYP_BYREF, srcFld, fldOffsetNode);
                         }
                         srcFld = gtNewIndir(destType, srcFld);
+                        assert(srcFld->OperIs(GT_IND));
+                        GenTreeIndir* indir = srcFld->AsIndir();
+                        indir->gtFlags |= GTF_IND_NONFAULTING;
+                        if ((indir->Addr()->gtFlags & GTF_EXCEPT) == 0)
+                        {
+                            indir->gtFlags &= ~GTF_EXCEPT;
+                        }
                     }
                 }
             }
