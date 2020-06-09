@@ -10341,6 +10341,19 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
     }
 #endif // FEATURE_MULTIREG_RET
 
+    if (src->IsCall() && dest->OperIs(GT_LCL_VAR))
+    {
+        LclVarDsc* varDsc = lvaGetDesc(dest->AsLclVar());
+        if (varDsc->lvPromoted && varDsc->lvFieldCnt == 1)
+        {
+            JITDUMP(" not morphing a single reg call return\n");
+            // Set `lvIsMultiRegRet` to exclude it from SSA, it is a temporary solution,
+            // inspired by multi-reg call work. We should support SSA for such structs in the future.
+            varDsc->lvIsMultiRegRet = true;
+            return tree;
+        }
+    }
+
     // If we have an array index on the lhs, we need to create an obj node.
 
     dest = fgMorphBlkNode(dest, true);

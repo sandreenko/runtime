@@ -3066,6 +3066,24 @@ void Lowering::LowerStoreLocCommon(GenTreeLclVarCommon* lclStore)
                 return;
             }
 #endif // !WINDOWS_AMD64_ABI
+            if (varDsc->lvPromoted && !call->HasMultiRegRetVal() &&
+                (comp->lvaGetPromotionType(varDsc) == Compiler::PROMOTION_TYPE_INDEPENDENT))
+            {
+                assert(varDsc->lvFieldCnt == 1);
+                unsigned   fldNum = varDsc->lvFieldLclStart;
+                LclVarDsc* fldDsc = comp->lvaGetDesc(fldNum);
+                lclStore->SetLclNum(fldNum);
+                lclStore->ChangeType(fldDsc->TypeGet());
+
+                if (varTypeUsesFloatReg(lclStore) != varTypeUsesFloatReg(call))
+                {
+                    GenTreeUnOp* bitcast =
+                        new (comp, GT_BITCAST) GenTreeOp(GT_BITCAST, lclStore->TypeGet(), call, nullptr);
+                    lclStore->gtOp1 = bitcast;
+                    BlockRange().InsertBefore(lclStore, bitcast);
+                    ContainCheckBitCast(bitcast);
+                }
+            }
         }
         else if (!src->OperIs(GT_LCL_VAR) || varDsc->GetLayout()->GetRegisterType() == TYP_UNDEF)
         {
