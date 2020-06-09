@@ -3164,6 +3164,8 @@ void Lowering::LowerRetStruct(GenTreeUnOp* ret)
             __fallthrough;
         case GT_IND:
             retVal->ChangeType(nativeReturnType);
+            TryCreateAddrMode(retVal->AsIndir()->Addr(), true);
+            ContainCheckIndir(retVal->AsIndir());
             break;
 
         case GT_LCL_VAR:
