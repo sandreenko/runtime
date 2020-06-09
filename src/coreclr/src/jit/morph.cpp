@@ -10490,7 +10490,7 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
                 noway_assert(varTypeIsStruct(destLclVar));
                 noway_assert(!opts.MinOpts());
 
-                if ((blockWidth == destLclVar->lvExactSize) && !destLclVar->lvDoNotEnregister)
+                if (blockWidth == destLclVar->lvExactSize)
                 {
                     JITDUMP(" (destDoFldAsg=true)");
                     // We may decide later that a copyblk is required when this struct has holes
@@ -10538,7 +10538,7 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
                 noway_assert(varTypeIsStruct(srcLclVar));
                 noway_assert(!opts.MinOpts());
 
-                if ((blockWidth == srcLclVar->lvExactSize) && !srcLclVar->lvDoNotEnregister)
+                if ((blockWidth == srcLclVar->lvExactSize))
                 {
                     JITDUMP(" (srcDoFldAsg=true)");
                     // We may decide later that a copyblk is required when this struct has holes
@@ -10617,7 +10617,7 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
         if (!requiresCopyBlock)
         {
             // Are both dest and src promoted structs?
-            if (destDoFldAsg && srcDoFldAsg)
+            if (destDoFldAsg && srcDoFldAsg && (!destLclVar->lvDoNotEnregister || !srcLclVar->lvDoNotEnregister))
             {
                 // Both structs should be of the same type, or have the same number of fields of the same type.
                 // If not we will use a copy block.
@@ -10649,13 +10649,7 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
                     }
                 }
             }
-            // Are neither dest or src promoted structs?
-            else if (!destDoFldAsg && !srcDoFldAsg)
-            {
-                requiresCopyBlock = true; // Leave as a CopyBlock
-                JITDUMP(" with no promoted structs");
-            }
-            else if (destDoFldAsg)
+            else if (destDoFldAsg && !destLclVar->lvDoNotEnregister)
             {
                 // Match the following kinds of trees:
                 //  fgMorphTree BB01, stmt 9 (before)
@@ -10699,9 +10693,8 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
                     }
                 }
             }
-            else
+            else if (srcDoFldAsg && !srcLclVar->lvDoNotEnregister)
             {
-                assert(srcDoFldAsg);
                 // Check for the symmetric case (which happens for the _pointer field of promoted spans):
                 //
                 //               [000240] -----+------             /--*  lclVar    struct(P) V18 tmp9
@@ -10722,6 +10715,14 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
                         destSingleLclVarAsg = true;
                     }
                 }
+            }
+            else
+            {
+                // Are neither dest or src independently promoted structs?
+                assert((!destDoFldAsg || destLclVar->lvDoNotEnregister) &&
+                       (!srcDoFldAsg || srcLclVar->lvDoNotEnregister));
+                requiresCopyBlock = true; // Leave as a CopyBlock
+                JITDUMP(" with no promoted structs");
             }
         }
 
