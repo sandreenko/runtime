@@ -2935,7 +2935,6 @@ void Lowering::LowerRet(GenTreeUnOp* ret)
     if ((ret->TypeGet() != TYP_VOID) && !varTypeIsStruct(ret) &&
         (varTypeUsesFloatReg(ret) != varTypeUsesFloatReg(ret->gtGetOp1())))
     {
-        assert(comp->compDoOldStructRetyping());
         GenTreeUnOp* bitcast = new (comp, GT_BITCAST) GenTreeOp(GT_BITCAST, ret->TypeGet(), ret->gtGetOp1(), nullptr);
         ret->gtOp1           = bitcast;
         BlockRange().InsertBefore(ret, bitcast);
@@ -2952,15 +2951,26 @@ void Lowering::LowerRet(GenTreeUnOp* ret)
                 if (varTypeIsStruct(ret->TypeGet()))
                 {
                     assert(!comp->compDoOldStructRetyping());
-                    bool actualTypesMatch = false;
-                    if (genActualType(comp->info.compRetNativeType) == genActualType(retVal->TypeGet()))
+                    bool constStructInit = retVal->IsConstInitVal();
+
+                    bool      actualTypesMatch = false;
+                    var_types retActualType    = genActualType(comp->info.compRetNativeType);
+                    var_types retValActualType = genActualType(retVal->TypeGet());
+                    if (retActualType == retValActualType)
                     {
                         // This could happen if we have retyped op1 as a primitive type during struct promotion,
                         // check `retypedFieldsMap` for details.
                         actualTypesMatch = true;
                     }
-                    bool constStructInit = retVal->IsConstInitVal();
-                    assert(actualTypesMatch || constStructInit);
+                    assert(comp->info.compRetNativeType != TYP_STRUCT);
+
+                    bool implicitCastFromSameOrBiggerSize = false;
+                    if (genTypeSize(retActualType) <= genTypeSize(retValActualType))
+                    {
+                        implicitCastFromSameOrBiggerSize = true;
+                    }
+
+                    assert(actualTypesMatch || constStructInit || implicitCastFromSameOrBiggerSize);
                 }
                 else
                 {
@@ -3248,13 +3258,6 @@ void Lowering::LowerRetStructLclVar(GenTreeUnOp* ret)
     unsigned   lclNum = lclVar->GetLclNum();
     LclVarDsc* varDsc = comp->lvaGetDesc(lclNum);
 
-#ifdef DEBUG
-    if (comp->gtGetStructHandleIfPresent(lclVar) == NO_CLASS_HANDLE)
-    {
-        // a promoted struct field was retyped as its only field.
-        assert(varDsc->lvIsStructField);
-    }
-#endif
     if (varDsc->lvPromoted && (comp->lvaGetPromotionType(lclNum) == Compiler::PROMOTION_TYPE_INDEPENDENT))
     {
         if (varDsc->lvFieldCnt == 1)

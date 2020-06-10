@@ -11965,30 +11965,9 @@ GenTree* Compiler::fgMorphSmpOp(GenTree* tree, MorphAddrContext* mac)
 
                 return tree;
             }
-            if (varTypeIsStruct(tree) && op1->OperIs(GT_OBJ, GT_BLK))
+            if (!compDoOldStructRetyping() && !tree->TypeIs(TYP_VOID) && op1->OperIs(GT_OBJ, GT_BLK, GT_IND))
             {
-                assert(!compDoOldStructRetyping());
-                GenTree* addr = op1->AsBlk()->Addr();
-                // if we return `OBJ` or `BLK` from a local var, lcl var has to have a stack address.
-                if (addr->OperIs(GT_ADDR) && addr->gtGetOp1()->OperIs(GT_LCL_VAR))
-                {
-                    GenTreeLclVar* lclVar = addr->gtGetOp1()->AsLclVar();
-                    assert(!gtIsActiveCSE_Candidate(addr) && !gtIsActiveCSE_Candidate(op1));
-                    if (gtGetStructHandle(tree) == gtGetStructHandleIfPresent(lclVar))
-                    {
-                        // Fold *(&x).
-                        tree->AsUnOp()->gtOp1 = op1;
-                        DEBUG_DESTROY_NODE(op1);
-                        DEBUG_DESTROY_NODE(addr);
-                        op1 = lclVar;
-                    }
-                    else
-                    {
-                        // TODO-1stClassStructs: It is not address-taken or block operation,
-                        // but the current IR doesn't allow to express that cast without stack, see #11413.
-                        lvaSetVarDoNotEnregister(lclVar->GetLclNum() DEBUGARG(DNER_BlockOp));
-                    }
-                }
+                op1 = fgMorphRetInd(tree->AsUnOp());
             }
             break;
 
@@ -14209,6 +14188,71 @@ DONE_MORPHING_CHILDREN:
 
     return tree;
 }
+
+//----------------------------------------------------------------------------------------------
+// fgMorphRetInd: Try to get rid of extra IND(ADDR()) pairs in a return tree.
+//
+// Arguments:
+//    node - The return node that uses an indirection.
+//
+// Return Value:
+//    the original op1 of the ret if there was no optimization or an optimized new op1.
+//
+GenTree* Compiler::fgMorphRetInd(GenTreeUnOp* ret)
+{
+    assert(!compDoOldStructRetyping());
+    assert(ret->OperIs(GT_RETURN));
+    assert(ret->gtGetOp1()->OperIs(GT_IND, GT_BLK, GT_OBJ));
+    GenTreeIndir* ind  = ret->gtGetOp1()->AsIndir();
+    GenTree*      addr = ind->Addr();
+
+    if (addr->OperIs(GT_ADDR) && addr->gtGetOp1()->OperIs(GT_LCL_VAR))
+    {
+        // If `return` retypes LCL_VAR as a smaller struct it should not set `doNotEnregister` on that
+        // LclVar.
+        // Example: in `Vector128:AsVector2` we have RETURN SIMD8(OBJ SIMD8(ADDR byref(LCL_VAR SIMD16))).
+        GenTreeLclVar* lclVar = addr->gtGetOp1()->AsLclVar();
+        if (!lvaIsImplicitByRefLocal(lclVar->GetLclNum()))
+        {
+            assert(!gtIsActiveCSE_Candidate(addr) && !gtIsActiveCSE_Candidate(ind));
+            unsigned indSize;
+            if (ind->OperIs(GT_IND))
+            {
+                indSize = genTypeSize(ind);
+            }
+            else
+            {
+                indSize = ind->AsBlk()->GetLayout()->GetSize();
+            }
+
+            LclVarDsc* varDsc = lvaGetDesc(lclVar);
+
+            unsigned lclVarSize;
+            if (!lclVar->TypeIs(TYP_STRUCT))
+
+            {
+                lclVarSize = genTypeSize(lclVar->TypeGet());
+            }
+            else
+            {
+                lclVarSize = varDsc->lvExactSize;
+            }
+            assert((indSize <= lclVarSize) || varDsc->lvDoNotEnregister);
+            if (indSize <= lclVarSize)
+            {
+                // Fold (TYPE1)*(&(TYPE2)x) even if types do not match, lowering will handle it.
+                // Getting rid of this IND(ADDR()) pair allows to keep lclVar as not address taken
+                // and enregister it.
+                DEBUG_DESTROY_NODE(ind);
+                DEBUG_DESTROY_NODE(addr);
+                ret->gtOp1 = lclVar;
+                return ret->gtOp1;
+            }
+        }
+    }
+    return ind;
+}
+
 #ifdef _PREFAST_
 #pragma warning(pop)
 #endif
