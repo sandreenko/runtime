@@ -3263,21 +3263,68 @@ void Lowering::LowerRetStructLclVar(GenTreeUnOp* ret)
             assert(varDsc->lvRefCnt() == 0);
             unsigned   fieldLclNum = varDsc->lvFieldLclStart;
             LclVarDsc* fieldDsc    = comp->lvaGetDesc(fieldLclNum);
-            if (fieldDsc->lvFldOffset == 0)
-            {
-                lclVar->SetLclNum(fieldLclNum);
-                JITDUMP("Replacing an independently promoted local var with its only field for the return %u, %u\n",
-                        lclNum, fieldLclNum);
-                lclVar->ChangeType(fieldDsc->lvType);
-                lclNum = fieldLclNum;
-                varDsc = comp->lvaGetDesc(lclNum);
-            }
+            assert(fieldDsc->lvFldOffset == 0);
+
+            lclVar->SetLclNum(fieldLclNum);
+            JITDUMP("Replacing an independently promoted local var with its only field for the return %u, %u\n", lclNum,
+                    fieldLclNum);
+            lclVar->ChangeType(fieldDsc->lvType);
+            lclNum = fieldLclNum;
+            varDsc = comp->lvaGetDesc(lclNum);
         }
         else
         {
-            // TODO-1stClassStructs: We can no longer promote or enregister this struct,
-            // since it is referenced as a whole.
-            comp->lvaSetVarDoNotEnregister(lclNum DEBUGARG(Compiler::DNER_VMNeedsStackAddr));
+            BasicBlock::weight_t fieldReferencedCnt = 0;
+            for (unsigned i = 0; i < varDsc->lvFieldCnt; ++i)
+            {
+                unsigned   fieldLclNum = varDsc->lvFieldLclStart + i;
+                LclVarDsc* fieldDsc    = comp->lvaGetDesc(fieldLclNum);
+                fieldReferencedCnt += fieldDsc->lvRefCnt();
+            }
+
+            const BasicBlock::weight_t keepInMemoryCost = fieldReferencedCnt;
+            const unsigned magicConst = 5; // Decrease it if fix TODO below, but it will affect only ~300 methods.
+            const BasicBlock::weight_t spillToMemoryCost = varDsc->lvFieldCnt * comp->fgReturnCount * magicConst;
+            if (keepInMemoryCost <= spillToMemoryCost)
+            {
+                // We do not access the fields often, not profitable to keep them in regs.
+                comp->lvaSetVarDoNotEnregister(lclNum DEBUGARG(Compiler::DNER_VMNeedsStackAddr));
+            }
+            else
+            {
+                // TODO: construct it in a register, do not use memory, just a few `<<` anb `||`, here or in codegen?
+                const unsigned spillNum =
+                    comp->lvaGrabTemp(true DEBUGARG("Return value temp to gather return fields."));
+                CORINFO_CLASS_HANDLE structHnd = comp->gtGetStructHandle(lclVar);
+                comp->lvaSetStruct(spillNum, structHnd, false);
+                comp->lvaSetVarDoNotEnregister(spillNum DEBUGARG(Compiler::DNER_VMNeedsStackAddr));
+
+                varDsc = comp->lvaGetDesc(lclNum); // the table could have been reallocated.
+                for (unsigned i = 0; i < varDsc->lvFieldCnt; ++i)
+                {
+                    unsigned       fieldLclNum = varDsc->lvFieldLclStart + i;
+                    LclVarDsc*     fieldDsc    = comp->lvaGetDesc(fieldLclNum);
+                    unsigned       fieldOffset = fieldDsc->lvFldOffset;
+                    var_types      fieldType   = fieldDsc->TypeGet();
+                    GenTreeLclFld* spillField =
+                        new (comp, GT_STORE_LCL_FLD) GenTreeLclFld(GT_STORE_LCL_FLD, fieldType, spillNum, fieldOffset);
+                    spillField->gtFlags |= (GTF_VAR_DEF | GTF_VAR_USEASG);
+
+                    GenTreeLclVar* srcField = comp->gtNewLclvNode(fieldLclNum, fieldType)->AsLclVar();
+                    spillField->gtOp1       = srcField;
+
+                    BlockRange().InsertBefore(ret, srcField);
+                    BlockRange().InsertBefore(ret, spillField);
+                    ContainCheckStoreLoc(spillField);
+                }
+
+                GenTreeLclVar* loadSpill = comp->gtNewLclvNode(spillNum, lclVar->TypeGet())->AsLclVar();
+                BlockRange().InsertBefore(ret, loadSpill);
+                BlockRange().Remove(lclVar);
+                lclVar     = loadSpill;
+                ret->gtOp1 = loadSpill;
+                varDsc     = comp->lvaGetDesc(lclVar);
+            }
         }
     }
 
