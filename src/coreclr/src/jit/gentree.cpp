@@ -569,6 +569,7 @@ void Compiler::fgWalkAllTreesPre(fgWalkPreFn* visitor, void* pCallBackData)
     {
         for (Statement* stmt : block->Statements())
         {
+            compCurStmt = stmt;
             fgWalkTreePre(stmt->GetRootNodePointer(), visitor, pCallBackData);
         }
     }

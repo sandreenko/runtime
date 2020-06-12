@@ -9761,6 +9761,8 @@ public:
     static fgWalkPreFn gsMarkPtrsAndAssignGroups; // Shadow param analysis tree-walk
     static fgWalkPreFn gsReplaceShadowParams;     // Shadow param replacement tree-walk
 
+    static fgWalkPreFn TransformToFieldInit;
+
 #define DEFAULT_MAX_INLINE_SIZE 100 // Methods with >  DEFAULT_MAX_INLINE_SIZE IL bytes will never be inlined.
                                     // This can be overwritten by setting complus_JITInlineSize env variable.
 

@@ -9713,16 +9713,23 @@ GenTree* Compiler::fgMorphInitBlock(GenTree* tree)
 
             // If we have already determined that a promoted TYP_STRUCT lclVar will not be enregistered,
             // we are better off doing a block init.
-            if (destLclVar->lvPromoted && (!destLclVar->lvDoNotEnregister || !destLclNode->TypeIs(TYP_STRUCT)))
+            if (destLclVar->lvPromoted && !destLclNode->TypeIs(TYP_STRUCT))
             {
+                // Keep SIMD8 because of VN issues.
                 GenTree* newTree = fgMorphPromoteLocalInitBlock(destLclNode->AsLclVar(), initVal, blockSize);
-
                 if (newTree != nullptr)
                 {
                     tree         = newTree;
                     destDoFldAsg = true;
                     INDEBUG(morphed = true);
                 }
+            }
+
+            else if (destLclVar->lvPromoted && !destLclVar->lvDoNotEnregister && destLclNode->TypeIs(TYP_STRUCT))
+            {
+                // Do not make this decision here.
+                return tree;
+                // GenTree* newTree = fgMorphPromoteLocalInitBlock(destLclNode->AsLclVar(), initVal, blockSize);
             }
 
             // If destLclVar is not a reg-sized non-field-addressed struct, set it as DoNotEnregister.

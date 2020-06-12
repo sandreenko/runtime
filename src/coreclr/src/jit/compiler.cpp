@@ -4666,6 +4666,26 @@ void Compiler::compCompile(void** methodCodePtr, ULONG* methodCodeSize, JitFlags
         bool doRangeAnalysis = true;
         int  iterations      = 1;
 
+        // const bool isRecompute = false;
+        lvaComputeRefCounts(false, false); // Pass another parameter to increment counters when use as a whole, so we
+                                           // could compare field uses to whole uses.
+        // TODO: replace it with something like:
+        // for (Statement* stmt : StatementList(block->FirstNonPhiDef()))
+        //{
+        //    MarkLocalVarsVisitor visitor(this, block, stmt, isRecompute);
+        //    DISPSTMT(stmt);
+        //    visitor.WalkTree(stmt->GetRootNodePointer(), nullptr);
+        //}
+
+        fgWalkAllTreesPre(TransformToFieldInit, (void*)this);
+#ifdef DEBUG
+        if (verbose)
+        {
+            printf("Basic block list for '%s'\n", info.compFullName);
+            fgDispBasicBlocks(true);
+        }
+#endif
+
 #if defined(OPT_CONFIG)
         doSsa           = (JitConfig.JitDoSsa() != 0);
         doEarlyProp     = doSsa && (JitConfig.JitDoEarlyProp() != 0);

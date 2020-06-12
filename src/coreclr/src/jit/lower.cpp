@@ -6277,3 +6277,88 @@ void Lowering::ContainCheckBitCast(GenTree* node)
         op1->SetContained();
     }
 }
+
+Compiler::fgWalkResult Compiler::TransformToFieldInit(GenTree** pTree, fgWalkData* data)
+{
+    Compiler* comp = data->compiler;
+    GenTree*  tree = *pTree;
+
+    if (tree->OperIsInitBlkOp() && tree->TypeIs(TYP_STRUCT))
+    {
+        GenTreeOp* asg = tree->AsOp();
+        assert(asg->OperIs(GT_ASG));
+        if (asg->gtGetOp1()->OperIs(GT_LCL_VAR))
+        {
+            GenTreeLclVar* lclVar = asg->gtGetOp1()->AsLclVar();
+            LclVarDsc*     varDsc = comp->lvaGetDesc(lclVar);
+            if (varDsc->lvPromoted && !varDsc->lvDoNotEnregister && !varDsc->lvRegStruct)
+            {
+
+                GenTree* initVal       = asg->gtGetOp2();
+                bool     keepBlockInit = false;
+                if (!initVal->IsCnsIntOrI() || initVal->AsIntCon()->IconValue() != 0)
+                {
+                    keepBlockInit = true;
+                }
+                else
+                {
+                    BasicBlock::weight_t fieldReferencedCnt = 0;
+                    for (unsigned i = 0; i < varDsc->lvFieldCnt; ++i)
+                    {
+                        unsigned   fieldLclNum = varDsc->lvFieldLclStart + i;
+                        LclVarDsc* fieldDsc    = comp->lvaGetDesc(fieldLclNum);
+                        fieldReferencedCnt += fieldDsc->lvRefCnt();
+                    }
+                    const unsigned magicConst = 2;
+                    if ((fieldReferencedCnt != varDsc->lvFieldCnt) &&
+                        (fieldReferencedCnt < magicConst * varDsc->lvFieldCnt))
+                    {
+                        keepBlockInit = true;
+                    }
+                }
+
+                if (!keepBlockInit)
+                {
+                    GenTree* newTree =
+                        comp->fgMorphPromoteLocalInitBlock(lclVar, initVal, varDsc->GetLayout()->GetSize());
+                    if (newTree != nullptr)
+                    {
+                        GenTree* prev = initVal->gtPrev;
+                        GenTree* next = tree->gtNext;
+                        DEBUG_DESTROY_NODE(tree);
+                        DEBUG_DESTROY_NODE(lclVar);
+                        DEBUG_DESTROY_NODE(initVal);
+                        *pTree = newTree;
+                        comp->gtSetEvalOrder(newTree);
+                        GenTree* firstNode = comp->fgSetTreeSeq(newTree, prev);
+                        if (prev)
+                        {
+                            firstNode->gtPrev = prev;
+                            prev->gtNext      = firstNode;
+                        }
+
+                        if (next != nullptr)
+                        {
+                            next->gtPrev    = newTree;
+                            newTree->gtNext = next;
+                        }
+                        if (comp->compCurStmt->GetTreeList() == initVal)
+                        {
+                            comp->compCurStmt->SetTreeList(firstNode);
+                        }
+                    }
+                    else
+                    {
+                        keepBlockInit = true;
+                    }
+                }
+                if (keepBlockInit)
+                {
+                    comp->lvaSetVarDoNotEnregister(lclVar->GetLclNum() DEBUGARG(DNER_BlockOp));
+                }
+            }
+        }
+    }
+
+    return WALK_CONTINUE;
+}
