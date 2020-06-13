@@ -10618,8 +10618,10 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
         // If we passed the above checks, then we will check these two
         if (!requiresCopyBlock)
         {
+            bool dstFldIsProfitable = (destLclVar != nullptr && (!destLclVar->lvDoNotEnregister || destLclVar->HasGCPtr() || (destLclVar->lvFieldCnt == 1)));
+            bool srcFldIsProfitable = (srcLclVar != nullptr && (!srcLclVar->lvDoNotEnregister || srcLclVar->HasGCPtr() || (srcLclVar->lvFieldCnt == 1)));
             // Are both dest and src promoted structs?
-            if (destDoFldAsg && srcDoFldAsg)
+            if (destDoFldAsg && srcDoFldAsg && (dstFldIsProfitable || srcFldIsProfitable))
             {
                 // Both structs should be of the same type, or have the same number of fields of the same type.
                 // If not we will use a copy block.
@@ -10651,13 +10653,7 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
                     }
                 }
             }
-            // Are neither dest or src promoted structs?
-            else if (!destDoFldAsg && !srcDoFldAsg)
-            {
-                requiresCopyBlock = true; // Leave as a CopyBlock
-                JITDUMP(" with no promoted structs");
-            }
-            else if (destDoFldAsg)
+            else if (destDoFldAsg && dstFldIsProfitable)
             {
                 // Match the following kinds of trees:
                 //  fgMorphTree BB01, stmt 9 (before)
@@ -10701,9 +10697,8 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
                     }
                 }
             }
-            else
+            else if (srcDoFldAsg && srcFldIsProfitable)
             {
-                assert(srcDoFldAsg);
                 // Check for the symmetric case (which happens for the _pointer field of promoted spans):
                 //
                 //               [000240] -----+------             /--*  lclVar    struct(P) V18 tmp9
@@ -10724,6 +10719,13 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
                         destSingleLclVarAsg = true;
                     }
                 }
+            }
+            // Are neither dest or src promoted structs?
+            else
+            {
+                assert(!(destDoFldAsg && dstFldIsProfitable) && !(srcDoFldAsg && srcFldIsProfitable));
+                requiresCopyBlock = true; // Leave as a CopyBlock
+                JITDUMP(" with no promoted structs");
             }
         }
 
