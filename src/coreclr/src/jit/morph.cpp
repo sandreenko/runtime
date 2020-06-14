@@ -14236,14 +14236,21 @@ GenTree* Compiler::fgMorphRetInd(GenTreeUnOp* ret)
             if (!lclVar->TypeIs(TYP_STRUCT))
 
             {
-                lclVarSize = genTypeSize(lclVar->TypeGet());
+                lclVarSize = genTypeSize(varDsc->TypeGet());
             }
             else
             {
                 lclVarSize = varDsc->lvExactSize;
             }
             assert((indSize <= lclVarSize) || varDsc->lvDoNotEnregister);
-            if (indSize <= lclVarSize)
+
+#if defined(TARGET_64BIT)
+            bool canFold = (indSize <= lclVarSize);
+#else // !TARGET_64BIT
+            // TODO: improve 32 bit targets handling for LONG returns if necessary.
+            bool canFold = (indSize <= lclVarSize) && (lclVarSize <= REGSIZE_BYTES);
+#endif
+            if (canFold)
             {
                 // Fold (TYPE1)*(&(TYPE2)x) even if types do not match, lowering will handle it.
                 // Getting rid of this IND(ADDR()) pair allows to keep lclVar as not address taken
@@ -14251,7 +14258,7 @@ GenTree* Compiler::fgMorphRetInd(GenTreeUnOp* ret)
                 DEBUG_DESTROY_NODE(ind);
                 DEBUG_DESTROY_NODE(addr);
                 ret->gtOp1 = lclVar;
-                return ret->gtOp1;
+                return ret->gtGetOp1();
             }
         }
     }
