@@ -1303,7 +1303,7 @@ void Lowering::LowerArg(GenTreeCall* call, GenTree** ppArg)
     // TYP_SIMD8 parameters that are passed as longs
     if (type == TYP_SIMD8 && genIsValidIntReg(info->GetRegNum()))
     {
-        GenTreeUnOp* bitcast = new (comp, GT_BITCAST) GenTreeOp(GT_BITCAST, TYP_LONG, arg, nullptr);
+        GenTree* bitcast = comp->gtNewBitCastNode(TYP_LONG, arg);
         BlockRange().InsertAfter(arg, bitcast);
 
         *ppArg = arg = bitcast;
@@ -2935,8 +2935,8 @@ void Lowering::LowerRet(GenTreeUnOp* ret)
     if ((ret->TypeGet() != TYP_VOID) && !varTypeIsStruct(ret) && !varTypeIsStruct(retVal) &&
         (varTypeUsesFloatReg(ret) != varTypeUsesFloatReg(retVal)))
     {
-        GenTreeUnOp* bitcast = new (comp, GT_BITCAST) GenTreeOp(GT_BITCAST, ret->TypeGet(), ret->gtGetOp1(), nullptr);
-        ret->gtOp1           = bitcast;
+        GenTree* bitcast = comp->gtNewBitCastNode(ret->TypeGet(), retVal);
+        ret->gtOp1       = bitcast;
         BlockRange().InsertBefore(ret, bitcast);
         ContainCheckBitCast(bitcast);
     }
@@ -2947,6 +2947,15 @@ void Lowering::LowerRet(GenTreeUnOp* ret)
         {
             if (varTypeIsStruct(ret->TypeGet()) != varTypeIsStruct(retVal->TypeGet()))
             {
+                if (comp->compDoOldStructRetyping())
+                {
+#ifdef FEATURE_SIMD
+                    assert(ret->TypeIs(TYP_DOUBLE));
+                    assert(retVal->TypeIs(TYP_SIMD8));
+#else  // !FEATURE_SIMD
+                    unreached();
+#endif // !FEATURE_SIMD
+                }
                 if (varTypeIsStruct(ret->TypeGet()))
                 {
                     assert(!comp->compDoOldStructRetyping());
@@ -2971,28 +2980,19 @@ void Lowering::LowerRet(GenTreeUnOp* ret)
 
                     assert(actualTypesMatch || constStructInit || implicitCastFromSameOrBiggerSize);
                 }
-                else if (comp->compDoOldStructRetyping())
-                {
-#ifdef FEATURE_SIMD
-                    assert(ret->TypeIs(TYP_DOUBLE));
-                    assert(retVal->TypeIs(TYP_SIMD8));
-#else  // !FEATURE_SIMD
-                    unreached();
-#endif // !FEATURE_SIMD
-                }
-                else
-                {
-                    // Return struct as a primitive using Unsafe cast.
-                    assert(!comp->compDoOldStructRetyping());
-                    assert(varTypeIsStruct(retVal->TypeGet()));
-                    LowerRetStructLclVar(ret);
-                }
             }
         }
 #endif // DEBUG
         if (varTypeIsStruct(ret))
         {
             LowerRetStruct(ret);
+        }
+        else if (!ret->TypeIs(TYP_VOID) && varTypeIsStruct(retVal))
+        {
+            // Return struct as a primitive using Unsafe cast.
+            assert(!comp->compDoOldStructRetyping());
+            assert(retVal->OperIs(GT_LCL_VAR));
+            LowerRetStructLclVar(ret);
         }
     }
 
@@ -3020,9 +3020,9 @@ void Lowering::LowerStoreLocCommon(GenTreeLclVarCommon* lclStore)
     {
         if (m_lsra->isRegCandidate(varDsc))
         {
-            GenTreeUnOp* bitcast = new (comp, GT_BITCAST) GenTreeOp(GT_BITCAST, lclStore->TypeGet(), src, nullptr);
-            lclStore->gtOp1      = bitcast;
-            src                  = lclStore->gtGetOp1();
+            GenTree* bitcast = comp->gtNewBitCastNode(lclStore->TypeGet(), src);
+            lclStore->gtOp1  = bitcast;
+            src              = lclStore->gtGetOp1();
             BlockRange().InsertBefore(lclStore, bitcast);
             ContainCheckBitCast(bitcast);
         }
@@ -3092,9 +3092,8 @@ void Lowering::LowerStoreLocCommon(GenTreeLclVarCommon* lclStore)
 
                 if (varTypeUsesFloatReg(lclStore) != varTypeUsesFloatReg(call))
                 {
-                    GenTreeUnOp* bitcast =
-                        new (comp, GT_BITCAST) GenTreeOp(GT_BITCAST, lclStore->TypeGet(), call, nullptr);
-                    lclStore->gtOp1 = bitcast;
+                    GenTree* bitcast = comp->gtNewBitCastNode(lclStore->TypeGet(), call);
+                    lclStore->gtOp1  = bitcast;
                     BlockRange().InsertBefore(lclStore, bitcast);
                     ContainCheckBitCast(bitcast);
                 }
@@ -3156,6 +3155,13 @@ void Lowering::LowerRetStruct(GenTreeUnOp* ret)
         else
         {
             assert(comp->info.compRetNativeType == TYP_SIMD16);
+            GenTree* retVal = ret->gtGetOp1();
+            if (!retVal->TypeIs(TYP_SIMD16))
+            {
+                assert(retVal->OperIs(GT_LCL_VAR));
+                assert(!comp->compDoOldStructRetyping());
+                LowerRetStructLclVar(ret);
+            }
             return;
         }
     }
@@ -3216,8 +3222,8 @@ void Lowering::LowerRetStruct(GenTreeUnOp* ret)
             assert(!retVal->TypeIs(TYP_STRUCT));
             if (varTypeUsesFloatReg(ret) != varTypeUsesFloatReg(retVal))
             {
-                GenTreeUnOp* bitcast = new (comp, GT_BITCAST) GenTreeOp(GT_BITCAST, ret->TypeGet(), retVal, nullptr);
-                ret->gtOp1           = bitcast;
+                GenTree* bitcast = comp->gtNewBitCastNode(ret->TypeGet(), retVal);
+                ret->gtOp1       = bitcast;
                 BlockRange().InsertBefore(ret, bitcast);
                 ContainCheckBitCast(bitcast);
             }
@@ -3303,8 +3309,8 @@ void Lowering::LowerRetStructLclVar(GenTreeUnOp* ret)
 
         if (varTypeUsesFloatReg(ret) != varTypeUsesFloatReg(lclVarType))
         {
-            GenTreeUnOp* bitcast = new (comp, GT_BITCAST) GenTreeOp(GT_BITCAST, ret->TypeGet(), lclVar, nullptr);
-            ret->gtOp1           = bitcast;
+            GenTree* bitcast = comp->gtNewBitCastNode(ret->TypeGet(), lclVar);
+            ret->gtOp1       = bitcast;
             BlockRange().InsertBefore(ret, bitcast);
             ContainCheckBitCast(bitcast);
         }
