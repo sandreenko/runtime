@@ -10618,8 +10618,11 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
         // If we passed the above checks, then we will check these two
         if (!requiresCopyBlock)
         {
-            bool dstFldIsProfitable = (destLclVar != nullptr && (!destLclVar->lvDoNotEnregister || destLclVar->HasGCPtr() || (destLclVar->lvFieldCnt == 1)));
-            bool srcFldIsProfitable = (srcLclVar != nullptr && (!srcLclVar->lvDoNotEnregister || srcLclVar->HasGCPtr() || (srcLclVar->lvFieldCnt == 1)));
+            bool dstFldIsProfitable =
+                (destLclVar != nullptr &&
+                 (!destLclVar->lvDoNotEnregister || destLclVar->HasGCPtr() || (destLclVar->lvFieldCnt == 1)));
+            bool srcFldIsProfitable = (srcLclVar != nullptr && (!srcLclVar->lvDoNotEnregister ||
+                                                                srcLclVar->HasGCPtr() || (srcLclVar->lvFieldCnt == 1)));
             // Are both dest and src promoted structs?
             if (destDoFldAsg && srcDoFldAsg && (dstFldIsProfitable || srcFldIsProfitable))
             {

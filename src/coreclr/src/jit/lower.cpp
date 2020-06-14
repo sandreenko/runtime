@@ -2931,9 +2931,9 @@ void Lowering::LowerRet(GenTreeUnOp* ret)
     DISPNODE(ret);
     JITDUMP("============");
 
-    GenTree* op1 = ret->gtGetOp1();
-    if ((ret->TypeGet() != TYP_VOID) && !varTypeIsStruct(ret) &&
-        (varTypeUsesFloatReg(ret) != varTypeUsesFloatReg(ret->gtGetOp1())))
+    GenTree* retVal = ret->gtGetOp1();
+    if ((ret->TypeGet() != TYP_VOID) && !varTypeIsStruct(ret) && !varTypeIsStruct(retVal) &&
+        (varTypeUsesFloatReg(ret) != varTypeUsesFloatReg(retVal)))
     {
         GenTreeUnOp* bitcast = new (comp, GT_BITCAST) GenTreeOp(GT_BITCAST, ret->TypeGet(), ret->gtGetOp1(), nullptr);
         ret->gtOp1           = bitcast;
@@ -2945,14 +2945,14 @@ void Lowering::LowerRet(GenTreeUnOp* ret)
 #ifdef DEBUG
         if (ret->TypeGet() != TYP_VOID)
         {
-            GenTree* retVal = ret->gtGetOp1();
             if (varTypeIsStruct(ret->TypeGet()) != varTypeIsStruct(retVal->TypeGet()))
             {
                 if (varTypeIsStruct(ret->TypeGet()))
                 {
                     assert(!comp->compDoOldStructRetyping());
-                    bool constStructInit = retVal->IsConstInitVal();
+                    assert(comp->info.compRetNativeType != TYP_STRUCT);
 
+                    bool      constStructInit  = retVal->IsConstInitVal();
                     bool      actualTypesMatch = false;
                     var_types retActualType    = genActualType(comp->info.compRetNativeType);
                     var_types retValActualType = genActualType(retVal->TypeGet());
@@ -2962,7 +2962,6 @@ void Lowering::LowerRet(GenTreeUnOp* ret)
                         // check `retypedFieldsMap` for details.
                         actualTypesMatch = true;
                     }
-                    assert(comp->info.compRetNativeType != TYP_STRUCT);
 
                     bool implicitCastFromSameOrBiggerSize = false;
                     if (genTypeSize(retActualType) <= genTypeSize(retValActualType))
@@ -2972,15 +2971,21 @@ void Lowering::LowerRet(GenTreeUnOp* ret)
 
                     assert(actualTypesMatch || constStructInit || implicitCastFromSameOrBiggerSize);
                 }
-                else
+                else if (comp->compDoOldStructRetyping())
                 {
 #ifdef FEATURE_SIMD
-                    assert(comp->compDoOldStructRetyping());
                     assert(ret->TypeIs(TYP_DOUBLE));
                     assert(retVal->TypeIs(TYP_SIMD8));
 #else  // !FEATURE_SIMD
                     unreached();
 #endif // !FEATURE_SIMD
+                }
+                else
+                {
+                    // Return struct as a primitive using Unsafe cast.
+                    assert(!comp->compDoOldStructRetyping());
+                    assert(varTypeIsStruct(retVal->TypeGet()));
+                    LowerRetStructLclVar(ret);
                 }
             }
         }
