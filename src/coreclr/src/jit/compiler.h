@@ -985,6 +985,22 @@ public:
         return GetLayout()->GetRegisterType();
     }
 
+    //------------------------------------------------------------------------
+    // GetRegisterType: Determine register type for that local var.
+    //
+    //
+    // Return Value:
+    //    TYP_UNDEF if the layout is enregistrable, register type otherwise.
+    //
+    var_types GetRegisterType() const
+    {
+        if (TypeGet() != TYP_STRUCT)
+        {
+            return TypeGet();
+        }
+        return GetLayout()->GetRegisterType();
+    }
+
 #ifdef DEBUG
 public:
     const char* lvReason;

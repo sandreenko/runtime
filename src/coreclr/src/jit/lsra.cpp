@@ -1490,16 +1490,14 @@ bool LinearScan::isRegCandidate(LclVarDsc* varDsc)
     // or enregistered, on x86 -- it is believed that we can enregister pinned (more properly, "pinning")
     // references when using the general GC encoding.
     unsigned lclNum = (unsigned)(varDsc - compiler->lvaTable);
-    if (varDsc->lvAddrExposed || !varTypeIsEnregisterable(varDsc))
+    if (varDsc->lvAddrExposed)
     {
-#ifdef DEBUG
-        Compiler::DoNotEnregisterReason dner = Compiler::DNER_AddrExposed;
-        if (!varDsc->lvAddrExposed)
-        {
-            dner = Compiler::DNER_IsStruct;
-        }
-#endif // DEBUG
-        compiler->lvaSetVarDoNotEnregister(lclNum DEBUGARG(dner));
+        compiler->lvaSetVarDoNotEnregister(lclNum DEBUGARG(Compiler::DNER_AddrExposed));
+        return false;
+    }
+    else if (!varTypeIsEnregisterable(varDsc) && (varDsc->GetLayout()->GetRegisterType() == TYP_UNDEF))
+    {
+        compiler->lvaSetVarDoNotEnregister(lclNum DEBUGARG(Compiler::DNER_IsStruct));
         return false;
     }
     else if (varDsc->lvPinned)
@@ -1525,7 +1523,8 @@ bool LinearScan::isRegCandidate(LclVarDsc* varDsc)
         return false;
     }
 
-    switch (genActualType(varDsc->TypeGet()))
+
+    switch (genActualType(varDsc->GetRegisterType()))
     {
 #if CPU_HAS_FP_SUPPORT
         case TYP_FLOAT:
@@ -1549,8 +1548,6 @@ bool LinearScan::isRegCandidate(LclVarDsc* varDsc)
 #endif // FEATURE_SIMD
 
         case TYP_STRUCT:
-            return false;
-
         case TYP_UNDEF:
         case TYP_UNKNOWN:
             noway_assert(!"lvType not set correctly");
@@ -1769,7 +1766,7 @@ void LinearScan::identifyCandidates()
 
         if (varDsc->lvLRACandidate)
         {
-            var_types type   = genActualType(varDsc->TypeGet());
+            var_types type   = genActualType(varDsc->GetRegisterType());
             Interval* newInt = newInterval(type);
             newInt->setLocalNumber(compiler, lclNum, this);
             VarSetOps::AddElemD(compiler, registerCandidateVars, varDsc->lvVarIndex);
@@ -2751,6 +2748,7 @@ bool LinearScan::isMatchingConstant(RegRecord* physRegRecord, RefPosition* refPo
                         return true;
                     }
                 }
+
                 break;
             }
             case GT_CNS_DBL:
@@ -7791,7 +7789,7 @@ void LinearScan::insertMove(
     // This var can't be marked lvRegister now
     varDsc->SetRegNum(REG_STK);
 
-    GenTree* src = compiler->gtNewLclvNode(lclNum, varDsc->TypeGet());
+    GenTree* src = compiler->gtNewLclvNode(lclNum, varDsc->GetRegisterType());
     SetLsraAdded(src);
 
     // There are three cases we need to handle:
@@ -7819,7 +7817,7 @@ void LinearScan::insertMove(
     }
     else
     {
-        var_types movType = genActualType(varDsc->TypeGet());
+        var_types movType = genActualType(varDsc->GetRegisterType());
         src->gtType       = movType;
 
         dst = new (compiler, GT_COPY) GenTreeCopyOrReload(GT_COPY, movType, src);
@@ -7883,11 +7881,11 @@ void LinearScan::insertSwap(
     LclVarDsc* varDsc2 = compiler->lvaTable + lclNum2;
     assert(reg1 != REG_STK && reg1 != REG_NA && reg2 != REG_STK && reg2 != REG_NA);
 
-    GenTree* lcl1 = compiler->gtNewLclvNode(lclNum1, varDsc1->TypeGet());
+    GenTree* lcl1 = compiler->gtNewLclvNode(lclNum1, varDsc1->GetRegisterType());
     lcl1->SetRegNum(reg1);
     SetLsraAdded(lcl1);
 
-    GenTree* lcl2 = compiler->gtNewLclvNode(lclNum2, varDsc2->TypeGet());
+    GenTree* lcl2 = compiler->gtNewLclvNode(lclNum2, varDsc2->GetRegisterType());
     lcl2->SetRegNum(reg2);
     SetLsraAdded(lcl2);
 

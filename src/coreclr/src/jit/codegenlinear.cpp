@@ -1140,7 +1140,7 @@ void CodeGen::genUnspillRegIfNeeded(GenTree* tree)
 
             GenTreeLclVar* lcl       = unspillTree->AsLclVar();
             LclVarDsc*     varDsc    = compiler->lvaGetDesc(lcl->GetLclNum());
-            var_types      spillType = unspillTree->TypeGet();
+            var_types      spillType = varDsc->GetRegisterType(lcl);
 
 // TODO-Cleanup: The following code could probably be further merged and cleaned up.
 #ifdef TARGET_XARCH
@@ -1159,14 +1159,14 @@ void CodeGen::genUnspillRegIfNeeded(GenTree* tree)
             if (spillType != genActualType(varDsc->lvType) && !varTypeIsGC(spillType) && !varDsc->lvNormalizeOnLoad())
             {
                 assert(!varTypeIsGC(varDsc));
-                spillType = genActualType(varDsc->lvType);
+                spillType = genActualType(varDsc->GetRegisterType());
             }
 #elif defined(TARGET_ARM64)
             var_types targetType = unspillTree->gtType;
             if (spillType != genActualType(varDsc->lvType) && !varTypeIsGC(spillType) && !varDsc->lvNormalizeOnLoad())
             {
                 assert(!varTypeIsGC(varDsc));
-                spillType = genActualType(varDsc->lvType);
+                spillType = genActualType(varDsc->GetRegisterType());
             }
 #elif defined(TARGET_ARM)
 // No normalizing for ARM
@@ -1219,14 +1219,25 @@ void CodeGen::genUnspillRegIfNeeded(GenTree* tree)
             // register that it was spilled from.
             // So we use 'unspillTree' to recover that spill temp.
             TempDsc* t        = regSet.rsUnspillInPlace(unspillTree, unspillTree->GetRegNum());
-            emitAttr emitType = emitActualTypeSize(unspillTree->TypeGet());
+
+            var_types      spillType = unspillTree->TypeGet(); 
+            if (unspillTree->TypeGet() == TYP_STRUCT)
+            {
+                assert(unspillTree->OperIs(GT_LCL_VAR));
+                GenTreeLclVar* lcl = unspillTree->AsLclVar();
+                LclVarDsc* varDsc = compiler->lvaGetDesc(lcl->GetLclNum());
+                spillType = varDsc->GetRegisterType(lcl);
+            }
+            
+
+            emitAttr emitType = emitActualTypeSize(spillType);
             // Reload into the register specified by 'tree' which may be a GT_RELOAD.
             regNumber dstReg = tree->GetRegNum();
-            GetEmitter()->emitIns_R_S(ins_Load(unspillTree->gtType), emitType, dstReg, t->tdTempNum(), 0);
+            GetEmitter()->emitIns_R_S(ins_Load(spillType), emitType, dstReg, t->tdTempNum(), 0);
             regSet.tmpRlsTemp(t);
 
             unspillTree->gtFlags &= ~GTF_SPILLED;
-            gcInfo.gcMarkRegPtrVal(dstReg, unspillTree->TypeGet());
+            gcInfo.gcMarkRegPtrVal(dstReg, spillType);
         }
     }
 }

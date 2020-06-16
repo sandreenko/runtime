@@ -1939,6 +1939,7 @@ GenTree* Compiler::fgMakeTmpArgNode(fgArgTabEntry* curArgTabEntry)
         {
             arg->ChangeOper(GT_LCL_FLD);
             arg->gtType = type;
+            varDsc->lvRegStruct = false; // TODO: delete this pessimization, need retyping deleting.
         }
         else
         {
@@ -3802,6 +3803,7 @@ GenTreeCall* Compiler::fgMorphArgs(GenTreeCall* call)
                             // Not a promoted struct, so just swizzle the type by using GT_LCL_FLD
                             argObj->ChangeOper(GT_LCL_FLD);
                             argObj->gtType = structBaseType;
+                            varDsc->lvRegStruct = false; // TODO: delete this pessimization, need retyping deleting.
                         }
                     }
                     else
@@ -10554,7 +10556,7 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
         bool destSingleLclVarAsg = false;
 
         // If either src or dest is a reg-sized non-field-addressed struct, keep the copyBlock.
-        if ((destLclVar != nullptr && destLclVar->lvRegStruct) || (srcLclVar != nullptr && srcLclVar->lvRegStruct))
+        if ((destLclVar != nullptr && destLclVar->lvRegStruct && destLclVar->lvIsUsedInSIMDIntrinsic()) || (srcLclVar != nullptr && srcLclVar->lvRegStruct && srcLclVar->lvIsUsedInSIMDIntrinsic()))
         {
             requiresCopyBlock = true;
         }
@@ -10937,6 +10939,8 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
             if (destDoFldAsg)
             {
                 noway_assert(destLclNum != BAD_VAR_NUM);
+                LclVarDsc* dstDsc = lvaGetDesc(destLclNum);
+                dstDsc->lvRegStruct = 0;
                 unsigned dstFieldLclNum = lvaTable[destLclNum].lvFieldLclStart + i;
                 dstFld                  = gtNewLclvNode(dstFieldLclNum, lvaTable[dstFieldLclNum].TypeGet());
                 // If it had been labeled a "USEASG", assignments to the individual promoted fields are not.
@@ -11025,6 +11029,8 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
             if (srcDoFldAsg)
             {
                 noway_assert(srcLclNum != BAD_VAR_NUM);
+                LclVarDsc* srcDsc = lvaGetDesc(srcLclNum);
+                srcDsc->lvRegStruct = 0;
                 unsigned srcFieldLclNum = lvaTable[srcLclNum].lvFieldLclStart + i;
                 srcFld                  = gtNewLclvNode(srcFieldLclNum, lvaTable[srcFieldLclNum].TypeGet());
 
@@ -11081,6 +11087,7 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
                             {
                                 srcLclVarTree->gtFlags |= GTF_VAR_CAST;
                                 srcLclVarTree->ChangeOper(GT_LCL_FLD);
+                                lvaGetDesc(dstFieldLclNum)->lvRegStruct = false; // TODO: delete this pessimization, need retyping deleting.
                                 srcLclVarTree->gtType = destType;
                                 srcLclVarTree->AsLclFld()->SetFieldSeq(curFieldSeq);
                                 srcFld = srcLclVarTree;
@@ -17270,7 +17277,7 @@ void Compiler::fgPromoteStructs()
             promotedVar = structPromotionHelper->TryPromoteStructVar(lclNum);
         }
 
-        if (!promotedVar && varDsc->lvIsSIMDType() && !varDsc->lvFieldAccessed)
+        if (!promotedVar && !varDsc->lvFieldAccessed && (varDsc->GetRegisterType() != TYP_UNDEF && varDsc->GetRegisterType() != TYP_SIMD16))
         {
             // Even if we have not used this in a SIMD intrinsic, if it is not being promoted,
             // we will treat it as a reg struct.

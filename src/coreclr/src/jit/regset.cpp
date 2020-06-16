@@ -325,10 +325,18 @@ void RegSet::rsSpillTree(regNumber reg, GenTree* tree, unsigned regIdx /* =0 */)
         LclVarDsc*     varDsc = m_rsCompiler->lvaGetDesc(lcl->GetLclNum());
         treeType              = varDsc->TypeGet();
     }
+    else if (tree->OperIs(GT_LCL_VAR))
+    {
+        GenTreeLclVar* lcl    = tree->AsLclVar();
+        LclVarDsc*     varDsc = m_rsCompiler->lvaGetDesc(lcl->GetLclNum());
+        treeType              = varDsc->GetRegisterType(lcl);
+    }
     else
     {
+
         treeType = tree->TypeGet();
     }
+    assert(treeType != TYP_STRUCT);
 
     var_types tempType = RegSet::tmpNormalizeType(treeType);
     regMaskTP mask;

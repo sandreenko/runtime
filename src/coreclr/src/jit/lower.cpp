@@ -3061,11 +3061,12 @@ void Lowering::LowerStoreLocCommon(GenTreeLclVarCommon* lclStore)
     }
     if (!srcIsMultiReg && (lclStore->TypeGet() == TYP_STRUCT) && (src->OperGet() != GT_PHI))
     {
+        const ClassLayout* layout  = varDsc->GetLayout();
+        const var_types    regType = layout->GetRegisterType();
         if (src->OperGet() == GT_CALL)
         {
             GenTreeCall*       call    = src->AsCall();
-            const ClassLayout* layout  = varDsc->GetLayout();
-            const var_types    regType = layout->GetRegisterType();
+
 
 #ifdef DEBUG
             const unsigned slotCount = layout->GetSlotCount();
@@ -3108,7 +3109,7 @@ void Lowering::LowerStoreLocCommon(GenTreeLclVarCommon* lclStore)
             }
 #endif // !WINDOWS_AMD64_ABI
         }
-        else if (!src->OperIs(GT_LCL_VAR) || varDsc->GetLayout()->GetRegisterType() == TYP_UNDEF)
+        else if (regType == TYP_UNDEF || (regType == TYP_SIMD16 && !src->OperIs(GT_LCL_VAR)))
         {
             GenTreeLclVar* addr = comp->gtNewLclVarAddrNode(lclStore->GetLclNum(), TYP_BYREF);
 
@@ -3130,6 +3131,17 @@ void Lowering::LowerStoreLocCommon(GenTreeLclVarCommon* lclStore)
             BlockRange().InsertBefore(objStore, addr);
             LowerBlockStore(objStore);
             return;
+        }
+        else if (!src->OperIs(GT_LCL_VAR))
+        {
+            src->ChangeType(regType);
+            lclStore->ChangeType(regType);
+            if (src->OperIs(GT_IND))
+            {
+                GenTreeIndir* indir = src->AsIndir();
+                TryCreateAddrMode(indir->Addr(), true);
+                ContainCheckIndir(indir);
+            }
         }
     }
     LowerStoreLoc(lclStore);

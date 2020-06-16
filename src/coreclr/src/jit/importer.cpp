@@ -1232,6 +1232,7 @@ GenTree* Compiler::impAssignStructPtr(GenTree*             destAddr,
                 {
                     // We change this to a GT_LCL_FLD (from a GT_ADDR of a GT_LCL_VAR)
                     lcl->ChangeOper(GT_LCL_FLD);
+                    varDsc->lvFieldAccessed = 1;
                     fgLclFldAssign(lclNum);
                     lcl->gtType = src->gtType;
                     asgType     = src->gtType;
@@ -9282,9 +9283,13 @@ REDO_RETURN_NODE:
     {
         // It is possible that we now have a lclVar of scalar type.
         // If so, don't transform it to GT_LCL_FLD.
-        if (lvaTable[op->AsLclVar()->GetLclNum()].lvType != info.compRetNativeType)
+        unsigned lclNum = op->AsLclVar()->GetLclNum();
+        LclVarDsc* varDsc = lvaGetDesc(lclNum);
+        if (varDsc->lvType != info.compRetNativeType)
         {
             op->ChangeOper(GT_LCL_FLD);
+            varDsc->lvFieldAccessed = 1;
+           
         }
     }
     else if (op->gtOper == GT_OBJ)

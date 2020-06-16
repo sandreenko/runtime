@@ -148,6 +148,25 @@ void Lowering::LowerBlockStore(GenTreeBlk* blkNode)
     GenTree* src     = blkNode->Data();
     unsigned size    = blkNode->Size();
 
+    if (src->OperIs(GT_LCL_VAR))
+    {
+        GenTreeLclVar* lclVar  = src->AsLclVar();
+        LclVarDsc*     varDsc  = comp->lvaGetDesc(lclVar);
+        var_types      regType = varDsc->GetRegisterType();
+        if (regType != TYP_UNDEF && regType != TYP_SIMD16)
+        {
+            blkNode->ChangeOper(GT_STOREIND);
+            blkNode->ChangeType(regType);
+            TryCreateAddrMode(blkNode->AsIndir()->Addr(), true);
+            if (!comp->codeGen->gcInfo.gcIsWriteBarrierStoreIndNode(blkNode))
+            {
+                LowerStoreIndir(blkNode->AsIndir());
+            }
+            return;
+        }
+    }
+
+
     if (blkNode->OperIsInitBlkOp())
     {
         if (src->OperIs(GT_INIT_VAL))
@@ -230,6 +249,14 @@ void Lowering::LowerBlockStore(GenTreeBlk* blkNode)
             // Sometimes the GT_IND type is a non-struct type and then GT_IND lowering may contain the
             // address, not knowing that GT_IND is part of a block op that has containment restrictions.
             src->AsIndir()->Addr()->ClearContained();
+        }
+        else if (src->OperIs(GT_LCL_VAR))
+        {
+            LclVarDsc* varDsc = comp->lvaGetDesc(src->AsLclVar());
+            if (varDsc->lvRegStruct)
+            {
+                src->ClearContained();
+            }
         }
 
         if (blkNode->OperIs(GT_STORE_OBJ))
