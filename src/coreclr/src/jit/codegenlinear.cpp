@@ -823,7 +823,7 @@ void CodeGen::genSpillVar(GenTree* tree)
         // therefore be store-normalized (rather than load-normalized). In fact, not performing store normalization
         // can lead to problems on architectures where a lclVar may be allocated to a register that is not
         // addressable at the granularity of the lclVar's defined type (e.g. x86).
-        var_types lclTyp = genActualType(varDsc->TypeGet());
+        var_types lclTyp = genActualType(varDsc->GetRegisterType());
         emitAttr  size   = emitTypeSize(lclTyp);
 
         // If this is a write-thru variable, we don't actually spill at a use, but we will kill the var in the reg
