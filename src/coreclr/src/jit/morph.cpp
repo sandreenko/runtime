@@ -9251,9 +9251,9 @@ GenTree* Compiler::fgMorphOneAsgBlockOp(GenTree* tree)
             destVarNum = destLclVarTree->AsLclVarCommon()->GetLclNum();
             destVarDsc = &(lvaTable[destVarNum]);
         }
-        if (lhsBlk->OperGet() == GT_OBJ)
+        if (lhsBlk->OperIs(GT_BLK, GT_OBJ))
         {
-            clsHnd = lhsBlk->AsObj()->GetLayout()->GetClassHandle();
+            clsHnd = lhsBlk->GetLayout()->GetClassHandle();
         }
     }
     else
@@ -9287,9 +9287,9 @@ GenTree* Compiler::fgMorphOneAsgBlockOp(GenTree* tree)
             destVarDsc = &(lvaTable[destVarNum]);
             if (asgType == TYP_STRUCT)
             {
-                clsHnd = destVarDsc->lvVerTypeInfo.GetClassHandle();
-                size   = destVarDsc->lvExactSize;
+                size = destVarDsc->lvExactSize;
             }
+            clsHnd = destVarDsc->GetStructHandle();
         }
         if (asgType != TYP_STRUCT)
         {
@@ -9564,7 +9564,7 @@ GenTree* Compiler::fgMorphOneAsgBlockOp(GenTree* tree)
                 noway_assert(src->IsIntegralConst(0));
                 noway_assert(destVarDsc != nullptr);
 
-                src = new (this, GT_SIMD) GenTreeSIMD(asgType, src, SIMDIntrinsicInit, destVarDsc->lvBaseType, size);
+                src = gtNewSIMDNode(asgType, src, SIMDIntrinsicInit, destVarDsc->lvBaseType, size, clsHnd);
             }
             else
 #endif
@@ -11320,8 +11320,9 @@ GenTree* Compiler::fgMorphFieldToSIMDIntrinsicGet(GenTree* tree)
     if (simdStructNode != nullptr)
     {
         assert(simdSize >= ((index + 1) * genTypeSize(baseType)));
-        GenTree* op2 = gtNewIconNode(index);
-        tree         = gtNewSIMDNode(baseType, simdStructNode, op2, SIMDIntrinsicGetItem, baseType, simdSize);
+        GenTree*             op2    = gtNewIconNode(index);
+        CORINFO_CLASS_HANDLE clsHnd = gtGetStructHandle(simdStructNode);
+        tree = gtNewSIMDNode(baseType, simdStructNode, op2, SIMDIntrinsicGetItem, baseType, simdSize, clsHnd);
 #ifdef DEBUG
         tree->gtDebugFlags |= GTF_DEBUG_NODE_MORPHED;
 #endif
@@ -11377,8 +11378,9 @@ GenTree* Compiler::fgMorphFieldAssignToSIMDIntrinsicSet(GenTree* tree)
 
         GenTree* target = gtClone(simdOp1Struct);
         assert(target != nullptr);
-        var_types simdType = target->gtType;
-        GenTree*  simdTree = gtNewSIMDNode(simdType, simdOp1Struct, op2, simdIntrinsicID, baseType, simdSize);
+        var_types            simdType = target->gtType;
+        CORINFO_CLASS_HANDLE clsHnd   = gtGetStructHandle(target);
+        GenTree* simdTree = gtNewSIMDNode(simdType, simdOp1Struct, op2, simdIntrinsicID, baseType, simdSize, clsHnd);
 
         tree->AsOp()->gtOp1 = target;
         tree->AsOp()->gtOp2 = simdTree;

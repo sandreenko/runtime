@@ -1344,6 +1344,7 @@ void Lowering::LowerArg(GenTreeCall* call, GenTree** ppArg)
         }
         else if (arg->OperIs(GT_SIMD, GT_HWINTRINSIC))
         {
+            // TODO: Check why GenTreeJitIntrinsic is not presented in gtlist.
             GenTreeJitIntrinsic* jitIntrinsic = reinterpret_cast<GenTreeJitIntrinsic*>(arg);
 
             // For HWIntrinsic, there are some intrinsics like ExtractVector128 which have

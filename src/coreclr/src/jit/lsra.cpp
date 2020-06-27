@@ -6830,7 +6830,7 @@ void LinearScan::insertUpperVectorSave(GenTree*     tree,
         return;
     }
 
-    LclVarDsc* varDsc = compiler->lvaTable + lclVarInterval->varNum;
+    LclVarDsc* varDsc = compiler->lvaGetDesc(lclVarInterval->varNum);
     assert(varTypeNeedsPartialCalleeSave(varDsc->lvType));
 
     // On Arm64, we must always have a register to save the upper half,
@@ -6852,9 +6852,10 @@ void LinearScan::insertUpperVectorSave(GenTree*     tree,
     saveLcl->SetRegNum(lclVarReg);
     SetLsraAdded(saveLcl);
 
-    GenTreeSIMD* simdNode =
-        new (compiler, GT_SIMD) GenTreeSIMD(LargeVectorSaveType, saveLcl, nullptr, SIMDIntrinsicUpperSave,
-                                            varDsc->lvBaseType, genTypeSize(varDsc->lvType));
+    CORINFO_CLASS_HANDLE clsHnd = varDsc->GetStructHandle();
+
+    GenTreeSIMD* simdNode = compiler->gtNewSIMDNode(LargeVectorSaveType, saveLcl, nullptr, SIMDIntrinsicUpperSave,
+                                                    varDsc->lvBaseType, genTypeSize(varDsc->lvType), clsHnd);
 
     if (simdNode->gtSIMDBaseType == TYP_UNDEF)
     {
@@ -6920,8 +6921,8 @@ void LinearScan::insertUpperVectorRestore(GenTree*     tree,
     SetLsraAdded(restoreLcl);
 
     GenTreeSIMD* simdNode =
-        new (compiler, GT_SIMD) GenTreeSIMD(varDsc->lvType, restoreLcl, nullptr, SIMDIntrinsicUpperRestore,
-                                            varDsc->lvBaseType, genTypeSize(varDsc->lvType));
+        compiler->gtNewSIMDNode(varDsc->lvType, restoreLcl, nullptr, SIMDIntrinsicUpperRestore, varDsc->lvBaseType,
+                                genTypeSize(varDsc->lvType), varDsc->GetStructHandle());
 
     if (simdNode->gtSIMDBaseType == TYP_UNDEF)
     {

@@ -653,6 +653,8 @@ void Lowering::LowerHWIntrinsicCmpOp(GenTreeHWIntrinsic* node, genTreeOps cmpOp)
     unsigned       simdSize    = node->gtSIMDSize;
     var_types      simdType    = Compiler::getSIMDTypeForSize(simdSize);
 
+    CORINFO_CLASS_HANDLE clsHnd = node->GetClassHandle();
+
     assert((intrinsicId == NI_Vector64_op_Equality) || (intrinsicId == NI_Vector64_op_Inequality) ||
            (intrinsicId == NI_Vector128_op_Equality) || (intrinsicId == NI_Vector128_op_Inequality));
 
@@ -700,7 +702,7 @@ void Lowering::LowerHWIntrinsicCmpOp(GenTreeHWIntrinsic* node, genTreeOps cmpOp)
         }
     }
 
-    GenTree* cmp = comp->gtNewSimdHWIntrinsicNode(simdType, op1, op2, cmpIntrinsic, baseType, simdSize);
+    GenTree* cmp = comp->gtNewSimdHWIntrinsicNode(simdType, op1, op2, cmpIntrinsic, baseType, simdSize, clsHnd);
     BlockRange().InsertBefore(node, cmp);
     LowerNode(cmp);
 
@@ -716,22 +718,24 @@ void Lowering::LowerHWIntrinsicCmpOp(GenTreeHWIntrinsic* node, genTreeOps cmpOp)
         GenTree* insCns = comp->gtNewIconNode(-1, TYP_INT);
         BlockRange().InsertAfter(idxCns, insCns);
 
-        GenTree* tmp =
-            comp->gtNewSimdAsHWIntrinsicNode(simdType, cmp, idxCns, insCns, NI_AdvSimd_Insert, TYP_INT, simdSize);
+        GenTree* tmp = comp->gtNewSimdAsHWIntrinsicNode(simdType, cmp, idxCns, insCns, NI_AdvSimd_Insert, TYP_INT,
+                                                        simdSize, clsHnd);
         BlockRange().InsertAfter(insCns, tmp);
         LowerNode(tmp);
 
         cmp = tmp;
     }
 
-    GenTree* msk = comp->gtNewSimdHWIntrinsicNode(simdType, cmp, NI_AdvSimd_Arm64_MinAcross, TYP_UBYTE, simdSize);
+    GenTree* msk =
+        comp->gtNewSimdHWIntrinsicNode(simdType, cmp, NI_AdvSimd_Arm64_MinAcross, TYP_UBYTE, simdSize, clsHnd);
     BlockRange().InsertAfter(cmp, msk);
     LowerNode(msk);
 
     GenTree* zroCns = comp->gtNewIconNode(0, TYP_INT);
     BlockRange().InsertAfter(msk, zroCns);
 
-    GenTree* val = comp->gtNewSimdAsHWIntrinsicNode(TYP_UBYTE, msk, zroCns, NI_AdvSimd_Extract, TYP_UBYTE, simdSize);
+    GenTree* val =
+        comp->gtNewSimdAsHWIntrinsicNode(TYP_UBYTE, msk, zroCns, NI_AdvSimd_Extract, TYP_UBYTE, simdSize, clsHnd);
     BlockRange().InsertAfter(zroCns, val);
     LowerNode(val);
 
@@ -954,7 +958,9 @@ void Lowering::LowerHWIntrinsicCreate(GenTreeHWIntrinsic* node)
     NamedIntrinsic createScalarUnsafe =
         (simdType == TYP_SIMD8) ? NI_Vector64_CreateScalarUnsafe : NI_Vector128_CreateScalarUnsafe;
 
-    tmp1 = comp->gtNewSimdHWIntrinsicNode(simdType, op1, createScalarUnsafe, baseType, simdSize);
+    CORINFO_CLASS_HANDLE clsHnd = node->GetClassHandle();
+
+    tmp1 = comp->gtNewSimdHWIntrinsicNode(simdType, op1, createScalarUnsafe, baseType, simdSize, clsHnd);
     BlockRange().InsertAfter(op1, tmp1);
     LowerNode(tmp1);
 
@@ -982,7 +988,7 @@ void Lowering::LowerHWIntrinsicCreate(GenTreeHWIntrinsic* node)
         idx = comp->gtNewIconNode(N, TYP_INT);
         BlockRange().InsertBefore(opN, idx);
 
-        tmp1 = comp->gtNewSimdHWIntrinsicNode(simdType, tmp1, idx, opN, NI_AdvSimd_Insert, baseType, simdSize);
+        tmp1 = comp->gtNewSimdHWIntrinsicNode(simdType, tmp1, idx, opN, NI_AdvSimd_Insert, baseType, simdSize, clsHnd);
         BlockRange().InsertAfter(opN, tmp1);
         LowerNode(tmp1);
 

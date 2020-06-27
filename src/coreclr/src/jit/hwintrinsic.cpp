@@ -834,7 +834,7 @@ GenTree* Compiler::impHWIntrinsic(NamedIntrinsic        intrinsic,
         if (!immOp2->IsCnsIntOrI())
         {
             assert(HWIntrinsicInfo::NoJmpTableImm(intrinsic));
-            return impNonConstFallback(intrinsic, retType, baseType);
+            return impNonConstFallback(intrinsic, retType, baseType, clsHnd);
         }
 
         unsigned int otherSimdSize = 0;
@@ -928,7 +928,7 @@ GenTree* Compiler::impHWIntrinsic(NamedIntrinsic        intrinsic,
         {
             if (HWIntrinsicInfo::NoJmpTableImm(intrinsic))
             {
-                return impNonConstFallback(intrinsic, retType, baseType);
+                return impNonConstFallback(intrinsic, retType, baseType, clsHnd);
             }
             else if (!mustExpand)
             {
@@ -972,7 +972,7 @@ GenTree* Compiler::impHWIntrinsic(NamedIntrinsic        intrinsic,
         {
             case 0:
                 assert(!isScalar);
-                retNode = gtNewSimdHWIntrinsicNode(retType, intrinsic, baseType, simdSize);
+                retNode = gtNewSimdHWIntrinsicNode(retType, intrinsic, baseType, simdSize, clsHnd);
                 break;
 
             case 1:
@@ -988,8 +988,8 @@ GenTree* Compiler::impHWIntrinsic(NamedIntrinsic        intrinsic,
                     }
                 }
 
-                retNode = isScalar ? gtNewScalarHWIntrinsicNode(retType, op1, intrinsic)
-                                   : gtNewSimdHWIntrinsicNode(retType, op1, intrinsic, baseType, simdSize);
+                retNode = isScalar ? gtNewScalarHWIntrinsicNode(retType, op1, intrinsic, clsHnd)
+                                   : gtNewSimdHWIntrinsicNode(retType, op1, intrinsic, baseType, simdSize, clsHnd);
                 break;
 
             case 2:
@@ -997,8 +997,8 @@ GenTree* Compiler::impHWIntrinsic(NamedIntrinsic        intrinsic,
                 op2 = addRangeCheckIfNeeded(intrinsic, op2, mustExpand, immLowerBound, immUpperBound);
                 op1 = getArgForHWIntrinsic(sigReader.op1VarType, sigReader.op1ClsHnd);
 
-                retNode = isScalar ? gtNewScalarHWIntrinsicNode(retType, op1, op2, intrinsic)
-                                   : gtNewSimdHWIntrinsicNode(retType, op1, op2, intrinsic, baseType, simdSize);
+                retNode = isScalar ? gtNewScalarHWIntrinsicNode(retType, op1, op2, intrinsic, clsHnd)
+                                   : gtNewSimdHWIntrinsicNode(retType, op1, op2, intrinsic, baseType, simdSize, clsHnd);
 
 #ifdef TARGET_XARCH
                 if ((intrinsic == NI_SSE42_Crc32) || (intrinsic == NI_SSE42_X64_Crc32))
@@ -1064,8 +1064,9 @@ GenTree* Compiler::impHWIntrinsic(NamedIntrinsic        intrinsic,
                     op3 = addRangeCheckIfNeeded(intrinsic, op3, mustExpand, immLowerBound, immUpperBound);
                 }
 
-                retNode = isScalar ? gtNewScalarHWIntrinsicNode(retType, op1, op2, op3, intrinsic)
-                                   : gtNewSimdHWIntrinsicNode(retType, op1, op2, op3, intrinsic, baseType, simdSize);
+                retNode = isScalar
+                              ? gtNewScalarHWIntrinsicNode(retType, op1, op2, op3, intrinsic, clsHnd)
+                              : gtNewSimdHWIntrinsicNode(retType, op1, op2, op3, intrinsic, baseType, simdSize, clsHnd);
 
 #ifdef TARGET_XARCH
                 if ((intrinsic == NI_AVX2_GatherVector128) || (intrinsic == NI_AVX2_GatherVector256))
@@ -1091,7 +1092,7 @@ GenTree* Compiler::impHWIntrinsic(NamedIntrinsic        intrinsic,
                 op1 = getArgForHWIntrinsic(sigReader.op1VarType, sigReader.op1ClsHnd);
 
                 assert(!isScalar);
-                retNode = gtNewSimdHWIntrinsicNode(retType, op1, op2, op3, op4, intrinsic, baseType, simdSize);
+                retNode = gtNewSimdHWIntrinsicNode(retType, op1, op2, op3, op4, intrinsic, baseType, simdSize, clsHnd);
 
                 if (category == HW_Category_SIMDByIndexedElement)
                 {

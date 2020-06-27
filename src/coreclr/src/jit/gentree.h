@@ -4746,6 +4746,14 @@ public:
         m_layout = layout;
     }
 
+    CORINFO_CLASS_HANDLE GetClassHandle() const
+    {
+        assert(m_layout != nullptr);
+        CORINFO_CLASS_HANDLE clsHnd = m_layout->GetClassHandle();
+        assert(clsHnd != NO_CLASS_HANDLE);
+        return clsHnd;
+    }
+
     regNumber GetOtherReg() const
     {
         return (regNumber)gtOtherReg;
@@ -4766,11 +4774,18 @@ public:
         gtAuxiliaryType = type;
     }
 
-    GenTreeJitIntrinsic(genTreeOps oper, var_types type, GenTree* op1, GenTree* op2, var_types baseType, unsigned size)
+    GenTreeJitIntrinsic(genTreeOps   oper,
+                        var_types    type,
+                        GenTree*     op1,
+                        GenTree*     op2,
+                        var_types    baseType,
+                        unsigned     size,
+                        ClassLayout* layout)
         : GenTreeOp(oper, type, op1, op2)
         , gtSIMDBaseType(baseType)
         , gtSIMDSize((unsigned char)size)
         , gtHWIntrinsicId(NI_Illegal)
+        , m_layout(layout)
     {
         assert(gtSIMDSize == size);
     }
@@ -4793,15 +4808,25 @@ public:
 struct GenTreeSIMD : public GenTreeJitIntrinsic
 {
 
-    GenTreeSIMD(var_types type, GenTree* op1, SIMDIntrinsicID simdIntrinsicID, var_types baseType, unsigned size)
-        : GenTreeJitIntrinsic(GT_SIMD, type, op1, nullptr, baseType, size)
+    GenTreeSIMD(var_types       type,
+                GenTree*        op1,
+                SIMDIntrinsicID simdIntrinsicID,
+                var_types       baseType,
+                unsigned        size,
+                ClassLayout*    layout)
+        : GenTreeJitIntrinsic(GT_SIMD, type, op1, nullptr, baseType, size, layout)
     {
         gtSIMDIntrinsicID = simdIntrinsicID;
     }
 
-    GenTreeSIMD(
-        var_types type, GenTree* op1, GenTree* op2, SIMDIntrinsicID simdIntrinsicID, var_types baseType, unsigned size)
-        : GenTreeJitIntrinsic(GT_SIMD, type, op1, op2, baseType, size)
+    GenTreeSIMD(var_types       type,
+                GenTree*        op1,
+                GenTree*        op2,
+                SIMDIntrinsicID simdIntrinsicID,
+                var_types       baseType,
+                unsigned        size,
+                ClassLayout*    layout)
+        : GenTreeJitIntrinsic(GT_SIMD, type, op1, op2, baseType, size, layout)
     {
         gtSIMDIntrinsicID = simdIntrinsicID;
     }
@@ -4820,14 +4845,20 @@ struct GenTreeSIMD : public GenTreeJitIntrinsic
 #ifdef FEATURE_HW_INTRINSICS
 struct GenTreeHWIntrinsic : public GenTreeJitIntrinsic
 {
-    GenTreeHWIntrinsic(var_types type, NamedIntrinsic hwIntrinsicID, var_types baseType, unsigned size)
-        : GenTreeJitIntrinsic(GT_HWINTRINSIC, type, nullptr, nullptr, baseType, size)
+    GenTreeHWIntrinsic(
+        var_types type, NamedIntrinsic hwIntrinsicID, var_types baseType, unsigned size, ClassLayout* layout)
+        : GenTreeJitIntrinsic(GT_HWINTRINSIC, type, nullptr, nullptr, baseType, size, layout)
     {
         gtHWIntrinsicId = hwIntrinsicID;
     }
 
-    GenTreeHWIntrinsic(var_types type, GenTree* op1, NamedIntrinsic hwIntrinsicID, var_types baseType, unsigned size)
-        : GenTreeJitIntrinsic(GT_HWINTRINSIC, type, op1, nullptr, baseType, size)
+    GenTreeHWIntrinsic(var_types      type,
+                       GenTree*       op1,
+                       NamedIntrinsic hwIntrinsicID,
+                       var_types      baseType,
+                       unsigned       size,
+                       ClassLayout*   layout)
+        : GenTreeJitIntrinsic(GT_HWINTRINSIC, type, op1, nullptr, baseType, size, layout)
     {
         gtHWIntrinsicId = hwIntrinsicID;
         if (OperIsMemoryStore())
@@ -4836,9 +4867,14 @@ struct GenTreeHWIntrinsic : public GenTreeJitIntrinsic
         }
     }
 
-    GenTreeHWIntrinsic(
-        var_types type, GenTree* op1, GenTree* op2, NamedIntrinsic hwIntrinsicID, var_types baseType, unsigned size)
-        : GenTreeJitIntrinsic(GT_HWINTRINSIC, type, op1, op2, baseType, size)
+    GenTreeHWIntrinsic(var_types      type,
+                       GenTree*       op1,
+                       GenTree*       op2,
+                       NamedIntrinsic hwIntrinsicID,
+                       var_types      baseType,
+                       unsigned       size,
+                       ClassLayout*   layout)
+        : GenTreeJitIntrinsic(GT_HWINTRINSIC, type, op1, op2, baseType, size, layout)
     {
         gtHWIntrinsicId = hwIntrinsicID;
         if (OperIsMemoryStore())

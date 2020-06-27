@@ -256,7 +256,10 @@ void HWIntrinsicInfo::lookupImmBounds(
 // Return Value:
 //     return the IR of semantic alternative on non-const imm-arg
 //
-GenTree* Compiler::impNonConstFallback(NamedIntrinsic intrinsic, var_types simdType, var_types baseType)
+GenTree* Compiler::impNonConstFallback(NamedIntrinsic       intrinsic,
+                                       var_types            simdType,
+                                       var_types            baseType,
+                                       CORINFO_CLASS_HANDLE clsHnd)
 {
     return nullptr;
 }
@@ -353,13 +356,13 @@ GenTree* Compiler::impSpecialIntrinsic(NamedIntrinsic        intrinsic,
             if (sig->numArgs == 1)
             {
                 op1     = impPopStack().val;
-                retNode = gtNewSimdHWIntrinsicNode(retType, op1, intrinsic, baseType, simdSize);
+                retNode = gtNewSimdHWIntrinsicNode(retType, op1, intrinsic, baseType, simdSize, clsHnd);
             }
             else if (sig->numArgs == 2)
             {
                 op2     = impPopStack().val;
                 op1     = impPopStack().val;
-                retNode = gtNewSimdHWIntrinsicNode(retType, op1, op2, intrinsic, baseType, simdSize);
+                retNode = gtNewSimdHWIntrinsicNode(retType, op1, op2, intrinsic, baseType, simdSize, clsHnd);
             }
             else
             {
@@ -374,7 +377,7 @@ GenTree* Compiler::impSpecialIntrinsic(NamedIntrinsic        intrinsic,
                     op1        = tmp;
                 }
 
-                retNode = gtNewSimdHWIntrinsicNode(retType, op1, intrinsic, baseType, simdSize);
+                retNode = gtNewSimdHWIntrinsicNode(retType, op1, intrinsic, baseType, simdSize, clsHnd);
             }
             break;
         }
@@ -399,7 +402,7 @@ GenTree* Compiler::impSpecialIntrinsic(NamedIntrinsic        intrinsic,
             assert(!sig->hasThis());
             assert(numArgs == 0);
 
-            retNode = gtNewSimdHWIntrinsicNode(retType, intrinsic, baseType, simdSize);
+            retNode = gtNewSimdHWIntrinsicNode(retType, intrinsic, baseType, simdSize, clsHnd);
             break;
         }
 
@@ -435,11 +438,12 @@ GenTree* Compiler::impSpecialIntrinsic(NamedIntrinsic        intrinsic,
                     if (simdSize == 16)
                     {
                         retNode = gtNewSimdHWIntrinsicNode(retType, vectorOp, gtNewIconNode(imm8), valueOp,
-                                                           NI_AdvSimd_Insert, baseType, simdSize);
+                                                           NI_AdvSimd_Insert, baseType, simdSize, clsHnd);
                     }
                     else
                     {
-                        retNode = gtNewSimdHWIntrinsicNode(retType, valueOp, NI_Vector64_Create, baseType, simdSize);
+                        retNode =
+                            gtNewSimdHWIntrinsicNode(retType, valueOp, NI_Vector64_Create, baseType, simdSize, clsHnd);
                     }
                     break;
 
@@ -451,7 +455,7 @@ GenTree* Compiler::impSpecialIntrinsic(NamedIntrinsic        intrinsic,
                 case TYP_INT:
                 case TYP_UINT:
                     retNode = gtNewSimdHWIntrinsicNode(retType, vectorOp, gtNewIconNode(imm8), valueOp,
-                                                       NI_AdvSimd_Insert, baseType, simdSize);
+                                                       NI_AdvSimd_Insert, baseType, simdSize, clsHnd);
                     break;
 
                 default:
@@ -467,12 +471,12 @@ GenTree* Compiler::impSpecialIntrinsic(NamedIntrinsic        intrinsic,
             //   AdvSimd.ExtractVector128(vector, Vector128<T>.Zero, 8 / sizeof(T)).GetLower();
             assert(numArgs == 1);
             op1            = impPopStack().val;
-            GenTree* zero  = gtNewSimdHWIntrinsicNode(retType, NI_Vector128_get_Zero, baseType, simdSize);
+            GenTree* zero  = gtNewSimdHWIntrinsicNode(retType, NI_Vector128_get_Zero, baseType, simdSize, clsHnd);
             ssize_t  index = 8 / genTypeSize(baseType);
 
             retNode = gtNewSimdHWIntrinsicNode(TYP_SIMD16, op1, zero, gtNewIconNode(index), NI_AdvSimd_ExtractVector128,
-                                               baseType, simdSize);
-            retNode = gtNewSimdHWIntrinsicNode(TYP_SIMD8, retNode, NI_Vector128_GetLower, baseType, 8);
+                                               baseType, simdSize, clsHnd);
+            retNode = gtNewSimdHWIntrinsicNode(TYP_SIMD8, retNode, NI_Vector128_GetLower, baseType, 8, clsHnd);
             break;
         }
 

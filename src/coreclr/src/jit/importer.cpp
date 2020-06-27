@@ -4199,15 +4199,15 @@ GenTree* Compiler::impIntrinsic(GenTree*                newobjThis,
                     //    ).ToScalar();
 
                     GenTree* op3 = gtNewSimdHWIntrinsicNode(TYP_SIMD16, impPopStack().val,
-                                                            NI_Vector128_CreateScalarUnsafe, callType, 16);
+                                                            NI_Vector128_CreateScalarUnsafe, callType, 16, clsHnd);
                     GenTree* op2 = gtNewSimdHWIntrinsicNode(TYP_SIMD16, impPopStack().val,
-                                                            NI_Vector128_CreateScalarUnsafe, callType, 16);
+                                                            NI_Vector128_CreateScalarUnsafe, callType, 16, clsHnd);
                     GenTree* op1 = gtNewSimdHWIntrinsicNode(TYP_SIMD16, impPopStack().val,
-                                                            NI_Vector128_CreateScalarUnsafe, callType, 16);
-                    GenTree* res =
-                        gtNewSimdHWIntrinsicNode(TYP_SIMD16, op1, op2, op3, NI_FMA_MultiplyAddScalar, callType, 16);
+                                                            NI_Vector128_CreateScalarUnsafe, callType, 16, clsHnd);
+                    GenTree* res = gtNewSimdHWIntrinsicNode(TYP_SIMD16, op1, op2, op3, NI_FMA_MultiplyAddScalar,
+                                                            callType, 16, clsHnd);
 
-                    retNode = gtNewSimdHWIntrinsicNode(callType, res, NI_Vector128_ToScalar, callType, 16);
+                    retNode = gtNewSimdHWIntrinsicNode(callType, res, NI_Vector128_ToScalar, callType, 16, clsHnd);
                 }
 #endif // TARGET_XARCH
                 break;
