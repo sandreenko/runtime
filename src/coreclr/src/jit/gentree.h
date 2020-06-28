@@ -4782,10 +4782,10 @@ public:
                         unsigned     size,
                         ClassLayout* layout)
         : GenTreeOp(oper, type, op1, op2)
+        , m_layout(layout)
         , gtSIMDBaseType(baseType)
         , gtSIMDSize((unsigned char)size)
         , gtHWIntrinsicId(NI_Illegal)
-        , m_layout(layout)
     {
         assert(gtSIMDSize == size);
     }
