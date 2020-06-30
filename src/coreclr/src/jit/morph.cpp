@@ -3731,7 +3731,12 @@ GenTreeCall* Compiler::fgMorphArgs(GenTreeCall* call)
 
                     if (argObj->OperIs(GT_OBJ))
                     {
-                        argObj->ChangeOper(GT_IND);
+                        if (!varTypeIsSIMD(structBaseType))
+                        {
+                            // Always keep OBJ oper for SIMD to make sure that
+                            // struct handle is always presented.
+                            argObj->ChangeOper(GT_IND);
+                        }
 
                         // Now see if we can fold *(&X) into X
                         if (argObj->AsOp()->gtOp1->gtOper == GT_ADDR)
@@ -5357,6 +5362,7 @@ GenTree* Compiler::fgMorphArrayIndex(GenTree* tree)
         }
 
         // Change `tree` into an indirection and return.
+        assert(!varTypeIsSIMD(tree));
         tree->ChangeOper(GT_IND);
         GenTreeIndir* const indir = tree->AsIndir();
         indir->Addr()             = indexAddr;
@@ -9961,7 +9967,7 @@ GenTree* Compiler::fgMorphGetStructAddr(GenTree** pTree, CORINFO_CLASS_HANDLE cl
         }
         else
         {
-            if (isRValue && tree->OperIsBlk())
+            if (isRValue && tree->OperIsBlk() && !varTypeIsSIMD(tree))
             {
                 tree->ChangeOper(GT_IND);
             }

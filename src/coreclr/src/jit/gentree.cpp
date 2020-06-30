@@ -17254,6 +17254,12 @@ CORINFO_CLASS_HANDLE Compiler::gtGetStructHandleIfPresent(GenTree* tree)
                 break;
             case GT_LCL_FLD:
 #ifdef FEATURE_SIMD
+                // Now it is the only place where we use SIMD cash and sometimes
+                // can not find a real handler.
+                // It is possible to restore it from FLD_SEQ, that we have in LCL_FLD,
+                // but I could imagine a struct with overlapping SIMD field, for it
+                // we would set FLD_SEQ to 'NotAField' to avoid CSE/VN optimizations
+                // and won't be able to get handler.
                 if (varTypeIsSIMD(tree))
                 {
                     structHnd = gtGetStructHandleForSIMD(tree->gtType, TYP_FLOAT);
