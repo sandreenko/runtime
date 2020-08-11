@@ -227,6 +227,11 @@ HRESULT STDMETHODCALLTYPE SlowPathELTProfiler::EnterCallback(FunctionIDOrClientI
 
 HRESULT STDMETHODCALLTYPE SlowPathELTProfiler::LeaveCallback(FunctionIDOrClientID functionIdOrClientID, COR_PRF_ELT_INFO eltInfo)
 {
+    char* pszLineBuffer = (char*) _alloca(2048*sizeof(char));
+    for (int i = 0; i < 2048; ++i)
+    {
+        pszLineBuffer[i] = '0';
+    }
     if (_testType != TestType::LeaveHooks)
     {
         return S_OK;

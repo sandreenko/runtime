@@ -7,169 +7,133 @@ using System.Runtime.CompilerServices;
 using System.Diagnostics;
 using System.Runtime.Intrinsics;
 using System.Security.Cryptography;
+using System.Threading;
 
 class Runtime_40440
 {
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    static bool UseArrayElementAsCallArgument<T>(T[,,] a, T b)
+
+    struct s8
     {
-        return G(b, a[1, 2, 3]);
+        long f;
     }
 
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    static bool G<T>(T a, T b)
+    struct s32
     {
-        if (typeof(T) == typeof(Vector<float>))
-        {
-            return (Vector<float>)(object)a == (Vector<float>)(object)b;
-        }
-        else if (typeof(T) == typeof(Vector2))
-        {
-            return (Vector2)(object)a == (Vector2)(object)b;
-        }
-        else if (typeof(T) == typeof(Vector3))
-        {
-            return (Vector3)(object)a == (Vector3)(object)b;
-        }
-        else if (typeof(T) == typeof(Vector4))
-        {
-            return (Vector4)(object)a == (Vector4)(object)b;
-        }
-        else if (typeof(T) == typeof(Vector64<float>))
-        {
-            return a.Equals(b);
-        }
-        else if (typeof(T) == typeof(SmallStruct))
-        {
-            return a.Equals(b);
-        }
-        else if (typeof(T) == typeof(LargeStruct))
-        {
-            return a.Equals(b);
-        }
-        return false;
+        s8 f1;
+        s8 f2;
+        s8 f3;
+        s8 f4;
     }
 
-    static bool CheckVectorFloat()
+    struct s128
     {
-        var v = new Vector<float>[4, 4, 4];
-        var e = new Vector<float>(33f);
-        v[1, 2, 3] = e;
-        return UseArrayElementAsCallArgument(v, e);
-    }
-    static bool CheckVector2()
-    {
-        var v = new Vector2[4, 4, 4];
-        var e = new Vector2(33f);
-        v[1, 2, 3] = e;
-        return UseArrayElementAsCallArgument(v, e);
+        s32 f1;
+        s32 f2;
+        s32 f3;
+        s32 f4;
     }
 
-    static bool CheckVector3()
+    struct s512
     {
-        var v = new Vector3[4, 4, 4];
-        var e = new Vector3(33f);
-        v[1, 2, 3] = e;
-        return UseArrayElementAsCallArgument(v, e);
+        s128 f1;
+        s128 f2;
+        s128 f3;
+        s128 f4;
     }
 
-    static bool CheckVector4()
+    static int StrangeMethod(int length, object a, object b, object c, object d)
     {
-        var v = new Vector3[4, 4, 4];
-        var e = new Vector3(33f);
-        v[1, 2, 3] = e;
-        return UseArrayElementAsCallArgument(v, e);
-    }
+        s512 s = new s512();
+        string e = new string("abe");
+        string f = new string("abf");
+        string g = new string("abg");
+        string h = new string("abh");
 
-    static bool CheckVector64()
-    {
-        var v = new Vector64<float>[4, 4, 4];
-        var e = Vector64.Create(33f);
-        v[1, 2, 3] = e;
-        return UseArrayElementAsCallArgument(v, e);
-    }
-
-    struct SmallStruct
-    {
-        float f;
-
-        public SmallStruct(float f)
+        if (length == 1000)
         {
-            this.f = f;
+            return 1000 + e[0] + f[0] + g[0] + h[0];
         }
+        Span<int> numbers = stackalloc int[length];
+        int sum = 0;
 
-        public override bool Equals(object obj)
+        //try
+        //{
+        for (int i = 0; i < length; ++i)
         {
-            if (!(obj is SmallStruct))
+            numbers[i] = i;
+        }
+        for (int i = 0; i < length; ++i)
+        {
+            sum += numbers[i];
+            if (sum == 4000)
             {
-                return false;
+                return 4000;
             }
-            return f == ((SmallStruct)obj).f;
         }
+        //}
+        //catch (ThreadAbortException)
+        //{
+
+        //    Thread.ResetAbort();
+        //}
+        return sum;
     }
 
-    static bool CheckSmallStruct()
+    static void CallGC()
     {
-        var v = new SmallStruct[4, 4, 4];
-        var e = new SmallStruct(33f);
-        v[1, 2, 3] = e;
-        return UseArrayElementAsCallArgument(v, e);
-    }
-
-    struct LargeStruct
-    {
-        float f1;
-        float f2;
-        float f3;
-        float f4;
-        float f5;
-
-        public LargeStruct(float f)
+        while (true)
         {
-            f1 = f;
-            f2 = f;
-            f3 = f;
-            f4 = f;
-            f5 = f;
-        }
-
-        public override bool Equals(object obj)
-        {
-            if (!(obj is LargeStruct))
-            {
-                return false;
-            }
-            LargeStruct s2 = (LargeStruct)obj;
-            return (f1 == s2.f1) && (f2 == s2.f2) && (f3 == s2.f3) && (f4 == s2.f4) && (f5 == s2.f5);
+            System.GC.Collect();
         }
     }
 
-    static bool CheckBigStruct()
-    {
-        var v = new LargeStruct[4, 4, 4];
-        var e = new LargeStruct(33f);
-        v[1, 2, 3] = e;
-        return UseArrayElementAsCallArgument(v, e);
-    }
+    //static void TryAbortThread(Thread thread, int abortTries)
+    //{
+    //    for (int j = 0; j < abortTries; ++j)
+    //    {
+    //        thread.Abort();
+    //    }
+    //}
 
     public static int Main()
     {
-        bool f = true;
-        f &= CheckVectorFloat();
-        Debug.Assert(f);
-        f &= CheckVector2();
-        Debug.Assert(f);
-        f &= CheckVector3();
-        Debug.Assert(f);
-        f &= CheckVector4();
-        Debug.Assert(f);
-        f &= CheckVector64();
-        Debug.Assert(f);
-        f &= CheckSmallStruct();
-        Debug.Assert(f);
-        f &= CheckBigStruct();
-        Debug.Assert(f);
+        Thread gcThread = new Thread(() => CallGC());
+        gcThread.Start();
 
-        return f ? 100 : 0;
+        const int iterCount = 1000;
+
+        for (int iter = 0; iter < iterCount; ++iter)
+        {
+            int sum = 0;
+            const int threadCount = 32;
+            Thread[] threads = new Thread[threadCount];
+            int[] results = new int[threadCount];
+            for (int i = 0; i < threadCount; ++i)
+            {
+                int threadId = i;
+                int length = threadCount * i + iter + 1;
+                threads[threadId] = new Thread(() => { results[threadId] = StrangeMethod(length, null, null, null, null); });
+                threads[threadId].Start();
+            }
+
+            //Thread[] abortThreads = new Thread[threadCount];
+
+            //for (int i = 0; i < threadCount; ++i)
+            //{
+            //    const int abortTries = 100;
+            //    int threadId = i;
+            //    abortThreads[threadId] = new Thread(() => { TryAbortThread(threads[threadId], abortTries); });
+            //}
+
+            for (int i = 0; i < threadCount; ++i)
+            {
+
+                threads[i].Join();
+                sum += results[i];
+            }
+
+            Console.WriteLine("Finished an iteration, the sum is: " + sum);
+        }
+        return 100;
     }
 }
