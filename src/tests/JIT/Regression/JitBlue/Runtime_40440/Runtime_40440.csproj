@@ -3,7 +3,7 @@
     <OutputType>Exe</OutputType>
   </PropertyGroup>
   <PropertyGroup>
-    <DebugType />
+    <DebugType>Full</DebugType>
     <Optimize>True</Optimize>
   </PropertyGroup>
   <ItemGroup>

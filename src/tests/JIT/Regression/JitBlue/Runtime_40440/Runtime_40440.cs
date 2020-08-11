@@ -56,8 +56,6 @@ class Runtime_40440
         Span<int> numbers = stackalloc int[length];
         int sum = 0;
 
-        //try
-        //{
         for (int i = 0; i < length; ++i)
         {
             numbers[i] = i;
@@ -70,12 +68,6 @@ class Runtime_40440
                 return 4000;
             }
         }
-        //}
-        //catch (ThreadAbortException)
-        //{
-
-        //    Thread.ResetAbort();
-        //}
         return sum;
     }
 
@@ -87,14 +79,6 @@ class Runtime_40440
         }
     }
 
-    //static void TryAbortThread(Thread thread, int abortTries)
-    //{
-    //    for (int j = 0; j < abortTries; ++j)
-    //    {
-    //        thread.Abort();
-    //    }
-    //}
-
     public static int Main()
     {
         Thread gcThread = new Thread(() => CallGC());
@@ -105,7 +89,7 @@ class Runtime_40440
         for (int iter = 0; iter < iterCount; ++iter)
         {
             int sum = 0;
-            const int threadCount = 32;
+            const int threadCount = 128;
             Thread[] threads = new Thread[threadCount];
             int[] results = new int[threadCount];
             for (int i = 0; i < threadCount; ++i)
@@ -116,14 +100,6 @@ class Runtime_40440
                 threads[threadId].Start();
             }
 
-            //Thread[] abortThreads = new Thread[threadCount];
-
-            //for (int i = 0; i < threadCount; ++i)
-            //{
-            //    const int abortTries = 100;
-            //    int threadId = i;
-            //    abortThreads[threadId] = new Thread(() => { TryAbortThread(threads[threadId], abortTries); });
-            //}
 
             for (int i = 0; i < threadCount; ++i)
             {
