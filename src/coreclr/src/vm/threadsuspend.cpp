@@ -557,7 +557,7 @@ BOOL EEGetThreadContext(Thread *pThread, CONTEXT *pContext)
 
 }
 
-BOOL EESetThreadContext(Thread *pThread, const CONTEXT *pContext)
+BOOL EESetThreadContext(Thread *pThread, const CONTEXT *pContext, DWORD *pdwLastError = NULL)
 {
     CONTRACTL {
         NOTHROW;
@@ -570,6 +570,8 @@ BOOL EESetThreadContext(Thread *pThread, const CONTEXT *pContext)
 #endif
 
     BOOL ret = pThread->SetThreadContext(pContext);
+
+    if (pdwLastError != NULL) *pdwLastError = GetLastError();
 
     STRESS_LOG6(LF_SYNC, LL_INFO1000, "Set thread context ret = %d EIP = %p ESP = %p EBP = %p, pThread = %p, ContextFlags = 0x%x\n",
         ret, GetIP((CONTEXT*)pContext), GetSP((CONTEXT*)pContext), GetFP((CONTEXT*)pContext), pThread, pContext->ContextFlags);
@@ -3193,7 +3195,8 @@ BOOL Thread::RedirectThreadAtHandledJITCase(PFN_REDIRECTTARGET pTgt)
     STRESS_LOG4(LF_SYNC, LL_INFO10000, "Redirecting thread %p(tid=%x) from address 0x%08x to address 0x%p\n",
         this, this->GetThreadId(), dwOrigEip, pTgt);
 
-    bRes = EESetThreadContext(this, pCtx);
+    Volatile<DWORD> lastError;
+    bRes = EESetThreadContext(this, pCtx, (DWORD*)&lastError);
     _ASSERTE(bRes && "Failed to SetThreadContext in RedirectThreadAtHandledJITCase - aborting redirect.");
 
     // Restore original IP
