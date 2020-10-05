@@ -418,17 +418,22 @@ unsigned Compiler::eeGetArgSize(CORINFO_ARG_LIST_HANDLE list, CORINFO_SIG_INFO* 
 //  otherwise will we pass this struct by value in multiple registers
 #else
         NYI("unknown target");
-#endif // defined(TARGET_XXX)
-#endif // FEATURE_MULTIREG_ARGS
+#endif                     // defined(TARGET_XXX)
+#endif                     // FEATURE_MULTIREG_ARGS
 
         // we pass this struct by value in multiple registers
         return roundUp(structSize, TARGET_POINTER_SIZE);
     }
     else
     {
+#if !defined(TARGET_ARM64) //|| !defined(TARGET_OSX) // TODO-seandree: uncomment OSX part.
         unsigned argSize = sizeof(int) * genTypeStSz(argType);
+        argSize = roundUp(argSize, TARGET_POINTER_SIZE);
+#else
+        unsigned argSize = genTypeSize(argType);
+#endif
         assert(0 < argSize && argSize <= sizeof(__int64));
-        return roundUp(argSize, TARGET_POINTER_SIZE);
+        return argSize;
     }
 #endif
 }
