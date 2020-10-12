@@ -935,16 +935,15 @@ GenTreeCall::Use* Compiler::impPopCallArgs(unsigned count, CORINFO_SIG_INFO* sig
             info.compCompHnd->classMustBeLoadedBeforeCodeIsRun(sig->retTypeSigClass);
         }
 
-        CORINFO_ARG_LIST_HANDLE argLst = sig->args;
-        CORINFO_CLASS_HANDLE    argClass;
-        CORINFO_CLASS_HANDLE    argRealClass;
+        CORINFO_ARG_LIST_HANDLE sigArgs = sig->args;
         GenTreeCall::Use*       arg;
 
         for (arg = argList, count = sig->numArgs; count > 0; arg = arg->GetNext(), count--)
         {
             PREFIX_ASSUME(arg != nullptr);
 
-            CorInfoType corType = strip(info.compCompHnd->getArgType(sig, argLst, &argClass));
+            CORINFO_CLASS_HANDLE classHnd;
+            CorInfoType          corType = strip(info.compCompHnd->getArgType(sig, sigArgs, &classHnd));
 
             var_types jitSigType = JITtype2varType(corType);
 
@@ -965,21 +964,35 @@ GenTreeCall::Use* Compiler::impPopCallArgs(unsigned count, CORINFO_SIG_INFO* sig
             }
 
             // insert any widening or narrowing casts for backwards compatibility
-
             arg->SetNode(impImplicitIorI4Cast(arg->GetNode(), jitSigType));
 
             if (corType != CORINFO_TYPE_CLASS && corType != CORINFO_TYPE_BYREF && corType != CORINFO_TYPE_PTR &&
-                corType != CORINFO_TYPE_VAR && (argRealClass = info.compCompHnd->getArgClass(sig, argLst)) != nullptr)
+                corType != CORINFO_TYPE_VAR)
             {
-                // Make sure that all valuetypes (including enums) that we push are loaded.
-                // This is to guarantee that if a GC is triggered from the prestub of this methods,
-                // all valuetypes in the method signature are already loaded.
-                // We need to be able to find the size of the valuetypes, but we cannot
-                // do a class-load from within GC.
-                info.compCompHnd->classMustBeLoadedBeforeCodeIsRun(argRealClass);
+                CORINFO_CLASS_HANDLE argRealClass = info.compCompHnd->getArgClass(sig, sigArgs);
+                if (argRealClass != nullptr)
+                {
+                    // Make sure that all valuetypes (including enums) that we push are loaded.
+                    // This is to guarantee that if a GC is triggered from the prestub of this methods,
+                    // all valuetypes in the method signature are already loaded.
+                    // We need to be able to find the size of the valuetypes, but we cannot
+                    // do a class-load from within GC.
+                    info.compCompHnd->classMustBeLoadedBeforeCodeIsRun(argRealClass);
+                }
             }
 
-            argLst = info.compCompHnd->getArgNext(argLst);
+            const var_types nodeArgType = arg->GetNode()->TypeGet();
+            if (!varTypeIsStruct(jitSigType) && genTypeSize(nodeArgType) != genTypeSize(jitSigType))
+            {
+                assert(!varTypeIsStruct(nodeArgType));
+                // Some ABI require precise size information for call arguments less than target pointer size,
+                // for example arm64 OSX. Create a special node to keep this information until morph
+                // consumes it into `fgArgInfo`.
+                GenTree* putArgType = gtNewOperNode(GT_PUTARG_TYPE, jitSigType, arg->GetNode());
+                arg->SetNode(putArgType);
+            }
+
+            sigArgs = info.compCompHnd->getArgNext(sigArgs);
         }
     }
 
@@ -19103,6 +19116,8 @@ void Compiler::impInlineRecordArgInfo(
 {
     InlArgInfo* inlCurArgInfo = &pInlineInfo->inlArgInfo[argNum];
 
+    curArgVal = curArgVal->gtSkipPutArgType();
+
     if (curArgVal->gtOper == GT_MKREFANY)
     {
         inlineResult->NoteFatal(InlineObservation::CALLSITE_ARG_IS_MKREFANY);
@@ -19306,7 +19321,9 @@ void Compiler::impInlineInitVars(InlineInfo* pInlineInfo)
         }
 
         unsigned __int64 bbFlags   = 0;
-        GenTree*         actualArg = use.GetNode()->gtRetExprVal(&bbFlags);
+        GenTree*         actualArg = use.GetNode();
+        actualArg                  = actualArg->gtSkipPutArgType();
+        actualArg                  = actualArg->gtRetExprVal(&bbFlags);
         impInlineRecordArgInfo(pInlineInfo, actualArg, argCnt, bbFlags, inlineResult);
 
         if (inlineResult->IsFailure())
@@ -19451,23 +19468,23 @@ void Compiler::impInlineInitVars(InlineInfo* pInlineInfo)
                 }
                 else if (genTypeSize(sigType) < EA_PTRSIZE)
                 {
-                    /* Narrowing cast */
-
-                    if (inlArgNode->gtOper == GT_LCL_VAR &&
-                        !lvaTable[inlArgNode->AsLclVarCommon()->GetLclNum()].lvNormalizeOnLoad() &&
-                        sigType == lvaGetRealType(inlArgNode->AsLclVarCommon()->GetLclNum()))
+                    // Narrowing cast.
+                    if (inlArgNode->OperIs(GT_LCL_VAR))
                     {
-                        /* We don't need to insert a cast here as the variable
-                           was assigned a normalized value of the right type */
-
-                        continue;
+                        const unsigned lclNum = inlArgNode->AsLclVarCommon()->GetLclNum();
+                        if (!lvaTable[lclNum].lvNormalizeOnLoad() && sigType == lvaGetRealType(lclNum))
+                        {
+                            // We don't need to insert a cast here as the variable
+                            // was assigned a normalized value of the right type.
+                            continue;
+                        }
                     }
 
                     inlArgNode = inlArgInfo[i].argNode = gtNewCastNode(TYP_INT, inlArgNode, false, sigType);
 
                     inlArgInfo[i].argIsLclVar = false;
 
-                    /* Try to fold the node in case we have constant arguments */
+                    // Try to fold the node in case we have constant arguments.
 
                     if (inlArgInfo[i].argIsInvariant)
                     {

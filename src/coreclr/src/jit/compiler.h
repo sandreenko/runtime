@@ -4656,6 +4656,8 @@ public:
                                        BasicBlock* canonicalBlock,
                                        flowList*   predEdge);
 
+    GenTree* fgCheckCallArgUpdate(GenTree* parent, GenTree* child, var_types origType);
+
 #if defined(FEATURE_EH_FUNCLETS) && defined(TARGET_ARM)
     // Sometimes we need to defer updating the BBF_FINALLY_TARGET bit. fgNeedToAddFinallyTargetBits signals
     // when this is necessary.
@@ -10421,6 +10423,7 @@ public:
             case GT_NULLCHECK:
             case GT_PUTARG_REG:
             case GT_PUTARG_STK:
+            case GT_PUTARG_TYPE:
             case GT_RETURNTRAP:
             case GT_NOP:
             case GT_RETURN:
