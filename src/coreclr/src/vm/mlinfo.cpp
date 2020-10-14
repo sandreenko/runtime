@@ -3029,7 +3029,7 @@ void MarshalInfo::SetupArgumentSizes()
     }
     else
     {
-#if !defined(TARGET_ARM64) || !defined(TARGET_OSX)
+#if !defined(TARGET_ARM64)
         m_nativeArgSize = StackElemSize(GetNativeSize(m_type));
 #else
         // Apple Arm64 packs small integer stack arguments without padding.

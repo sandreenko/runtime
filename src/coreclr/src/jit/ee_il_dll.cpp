@@ -426,7 +426,7 @@ unsigned Compiler::eeGetArgSize(CORINFO_ARG_LIST_HANDLE list, CORINFO_SIG_INFO* 
     }
     else
     {
-#if !defined(TARGET_ARM64) || !defined(TARGET_OSX)
+#if !defined(TARGET_ARM64)
         unsigned argSize = sizeof(int) * genTypeStSz(argType);
         argSize = roundUp(argSize, TARGET_POINTER_SIZE);
 #else
