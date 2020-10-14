@@ -1016,11 +1016,9 @@ void Compiler::lvaInitUserArgs(InitVarDscInfo* varDscInfo)
 
 #if FEATURE_FASTTAILCALL
             varDsc->SetStackOffset(varDscInfo->stackArgSize);
-#if defined(OSX_ARM64_ABI)
+
+            DEBUG_ARG_SLOTS_ASSERT(argSize % TARGET_POINTER_SIZE == 0);
             varDscInfo->stackArgSize += argSize;
-#else
-            varDscInfo->stackArgSize += roundUp(argSize, TARGET_POINTER_SIZE);
-#endif
 #endif // FEATURE_FASTTAILCALL
         }
 
@@ -5275,9 +5273,7 @@ void Compiler::lvaAssignVirtualFrameOffsetsToArgs()
     /* Update the argOffs to reflect arguments that are passed in registers */
 
     noway_assert(codeGen->intRegState.rsCalleeRegArgCount <= MAX_REG_ARG);
-#if !defined(OSX_ARM64_ABI)
-    noway_assert(compArgSize >= codeGen->intRegState.rsCalleeRegArgCount * REGSIZE_BYTES);
-#endif
+    DEBUG_ARG_SLOTS_ASSERT(compArgSize >= codeGen->intRegState.rsCalleeRegArgCount * REGSIZE_BYTES);
 
 #ifdef TARGET_X86
     argOffs -= codeGen->intRegState.rsCalleeRegArgCount * REGSIZE_BYTES;

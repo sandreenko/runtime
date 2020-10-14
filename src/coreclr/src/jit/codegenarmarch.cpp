@@ -687,9 +687,7 @@ void CodeGen::genPutArgStk(GenTreePutArgStk* treeNode)
 #ifdef DEBUG
     fgArgTabEntry* curArgTabEntry = compiler->gtArgEntryByNode(treeNode->gtCall, treeNode);
     assert(curArgTabEntry != nullptr);
-#if !defined(OSX_ARM64_ABI)
-    assert(argOffsetOut == (curArgTabEntry->slotNum * TARGET_POINTER_SIZE));
-#endif
+    DEBUG_ARG_SLOTS_ASSERT(argOffsetOut == (curArgTabEntry->slotNum * TARGET_POINTER_SIZE));
 #endif // DEBUG
 
     // Whether to setup stk arg in incoming or out-going arg area?

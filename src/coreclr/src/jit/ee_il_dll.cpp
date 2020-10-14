@@ -418,8 +418,8 @@ unsigned Compiler::eeGetArgSize(CORINFO_ARG_LIST_HANDLE list, CORINFO_SIG_INFO* 
 //  otherwise will we pass this struct by value in multiple registers
 #else
         NYI("unknown target");
-#endif                     // defined(TARGET_XXX)
-#endif                     // FEATURE_MULTIREG_ARGS
+#endif // defined(TARGET_XXX)
+#endif // FEATURE_MULTIREG_ARGS
 
         // we pass this struct by value in multiple registers
         return roundUp(structSize, TARGET_POINTER_SIZE);

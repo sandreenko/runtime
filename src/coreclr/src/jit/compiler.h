@@ -1805,7 +1805,7 @@ public:
         return size;
     }
 
-#endif // DEBUG && !OSX_ARM64_ABI
+#endif // DEBUG_ARG_SLOTS
 
 private:
     unsigned m_byteOffset;
