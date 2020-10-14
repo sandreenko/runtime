@@ -426,7 +426,7 @@ unsigned Compiler::eeGetArgSize(CORINFO_ARG_LIST_HANDLE list, CORINFO_SIG_INFO* 
     }
     else
     {
-#if !defined(TARGET_ARM64) //|| !defined(TARGET_OSX) // TODO-seandree: uncomment OSX part.
+#if !defined(TARGET_ARM64) || !defined(TARGET_OSX)
         unsigned argSize = sizeof(int) * genTypeStSz(argType);
         argSize = roundUp(argSize, TARGET_POINTER_SIZE);
 #else

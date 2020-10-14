@@ -2744,7 +2744,7 @@ public:
     {
         LIMITED_METHOD_CONTRACT;
         _ASSERTE(IsILStub());
-#if !defined(TARGET_ARM64) //|| !defined(TARGET_OSX) // TODO-seandree: uncomment OSX part.
+#if !defined(TARGET_ARM64) || !defined(TARGET_OSX)
         _ASSERTE((cbArgSize % TARGET_POINTER_SIZE) == 0);
 #endif
         m_dwExtendedFlags = (m_dwExtendedFlags & ~nomdStackArgSize) | ((DWORD)cbArgSize << 16);
