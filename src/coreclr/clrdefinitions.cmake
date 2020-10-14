@@ -43,9 +43,9 @@ if (CLR_CMAKE_TARGET_UNIX)
 
 endif(CLR_CMAKE_TARGET_UNIX)
 
-if(CLR_CMAKE_HOST_OSX AND CLR_CMAKE_TARGET_ARCH_ARM64)
-  add_compile_definitions($<$<NOT:$<BOOL:$<TARGET_PROPERTY:IGNORE_DEFAULT_TARGET_ARCH>>>:OSX_ARM64_ABI>)
-endif()
+# if(CLR_CMAKE_HOST_OSX AND CLR_CMAKE_TARGET_ARCH_ARM64)
+  # add_compile_definitions($<$<NOT:$<BOOL:$<TARGET_PROPERTY:IGNORE_DEFAULT_TARGET_ARCH>>>:OSX_ARM64_ABI>)
+# endif()
 
 if(CLR_CMAKE_TARGET_ALPINE_LINUX)
   # Alpine Linux doesn't have fixed stack limit, this define disables some stack pointer

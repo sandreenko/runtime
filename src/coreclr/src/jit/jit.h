@@ -245,6 +245,10 @@
 #define UNIX_AMD64_ABI_ONLY(x)
 #endif // defined(UNIX_AMD64_ABI)
 
+#if defined(TARGET_ARM64)
+#define OSX_ARM64_ABI
+#endif
+
 #if defined(DEBUG) && !defined(OSX_ARM64_ABI)
 // On all platforms except Arm64 OSX arguments on the stack are taking
 // register size slots. On these platforms we could check that stack slots count
