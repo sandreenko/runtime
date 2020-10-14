@@ -2964,7 +2964,7 @@ void Compiler::fgInitArgInfo(GenTreeCall* call)
 #if !defined(OSX_ARM64_ABI)
         unsigned argAlignBytes = TARGET_POINTER_SIZE;
 #else
-        unsigned argAlignBytes = TARGET_POINTER_SIZE; // TODO-OSX-ARM64: change it after other changes are merged.
+        unsigned argAlignBytes;
 #endif
         unsigned             size          = 0;
         unsigned             byteSize      = 0;
@@ -3055,7 +3055,7 @@ void Compiler::fgInitArgInfo(GenTreeCall* call)
         unsigned  structSize       = 0;
         bool      passStructByRef  = false;
 
-        bool     isStructArg;
+        const bool     isStructArg = varTypeIsStruct(argx);
         GenTree* actualArg = argx->gtEffectiveVal(true /* Commas only */);
 
         //
@@ -3063,7 +3063,6 @@ void Compiler::fgInitArgInfo(GenTreeCall* call)
         // TARGET_POINTER_SIZE stack slots, or the sum of these if the argument is split between the registers and
         // the stack.
         //
-        isStructArg                   = varTypeIsStruct(argx);
         CORINFO_CLASS_HANDLE objClass = NO_CLASS_HANDLE;
         if (isStructArg)
         {
@@ -3215,6 +3214,18 @@ void Compiler::fgInitArgInfo(GenTreeCall* call)
         // The 'size' value has now must have been set. (the original value of zero is an invalid value)
         assert(size != 0);
         assert(byteSize != 0);
+
+#if defined(OSX_ARM64_ABI)
+        if (isStructArg)
+        {
+            argAlignBytes = TARGET_POINTER_SIZE;
+        }
+        else
+        {
+            argAlignBytes = byteSize;
+        }
+
+#endif
 
         //
         // Figure out if the argument will be passed in a register.
