@@ -1384,8 +1384,15 @@ int ArgIteratorTemplate<ARGITERATOR_BASE>::GetNextOffset()
         break;
     }
 
+#if !defined(TARGET_ARM64) //|| !defined(TARGET_OSX) // TODO-seandree: uncomment OSX part.
     int cbArg = StackElemSize(argSize);
     int cArgSlots = cbArg / STACK_ELEM_SIZE;
+
+#else
+    int cbArg = argSize;
+    int cArgSlots = (cbArg + STACK_ELEM_SIZE - 1) / STACK_ELEM_SIZE;
+
+#endif
 
     if (cFPRegs>0 && !this->IsVarArg())
     {
