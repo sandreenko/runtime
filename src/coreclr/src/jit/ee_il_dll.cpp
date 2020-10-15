@@ -751,6 +751,7 @@ void Compiler::eeDispVar(ICorDebugInfo::NativeVarInfo* var)
             }
             else
             {
+                // TODO: it is not a slot on OSX arm64.
                 printf(STR_SPBASE "'[%d] (1 slot)", var->loc.vlStk.vlsOffset);
             }
             if (var->loc.vlType == (ICorDebugInfo::VarLocType)CodeGenInterface::VLT_REG_BYREF)
