@@ -16039,10 +16039,13 @@ void Compiler::gtExtractSideEffList(GenTree*  expr,
             {
                 if (m_compiler->gtNodeHasSideEffects(node, m_flags))
                 {
+                    // the node could be a side-effect free but marked as `GTF_MAKE_CSE`, so
+                    // we keep it.
                     m_sideEffects.Push(node);
                     if (node->OperIsBlk() && !node->OperIsStoreBlk())
                     {
                         JITDUMP("Replace an unused OBJ/BLK node [%06d] with a NULLCHECK\n", dspTreeID(node));
+                        // it would change a non-faulting ind to a non-faulting nullcheck.
                         m_compiler->gtChangeOperToNullCheck(node, m_compiler->compCurBB);
                     }
                     return Compiler::WALK_SKIP_SUBTREES;
