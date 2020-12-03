@@ -433,6 +433,7 @@ unsigned Compiler::eeGetArgSize(CORINFO_ARG_LIST_HANDLE list, CORINFO_SIG_INFO* 
         unsigned argSize = genTypeSize(argType);
 #endif
         assert(0 < argSize && argSize <= sizeof(__int64));
+        JITDUMP("return eeGetArgSize %u\n", argSize);
         return argSize;
     }
 #endif

@@ -606,7 +606,8 @@ void Compiler::lvaInitUserArgs(InitVarDscInfo* varDscInfo)
         // Otherwise there appear too many surplus pre-spills and other memory operations
         // with the associated locations .
         bool     isSoftFPPreSpill = opts.compUseSoftFP && varTypeIsFloating(varDsc->TypeGet());
-        unsigned argSize          = eeGetArgSize(argLst, &info.compMethodInfo->args);
+        const unsigned argSize          = eeGetArgSize(argLst, &info.compMethodInfo->args);
+        JITDUMP("arg size %u\n", argSize);
         unsigned cSlots =
             (argSize + TARGET_POINTER_SIZE - 1) / TARGET_POINTER_SIZE; // the total number of slots of this argument
         bool      isHfaArg = false;
@@ -1029,7 +1030,7 @@ void Compiler::lvaInitUserArgs(InitVarDscInfo* varDscInfo)
             assert((argSize % TARGET_POINTER_SIZE) == 0);
             assert((varDscInfo->stackArgSize % TARGET_POINTER_SIZE) == 0);
 #endif // !OSX_ARM64_ABI
-            JITDUMP("set user arg V%02u offset to %u\n", varDscInfo->stackArgSize);
+            JITDUMP("set user arg V%02u offset to %u, argSize %u\n", varDscInfo->stackArgSize, argSize);
             varDsc->SetStackOffset(varDscInfo->stackArgSize);
             varDscInfo->stackArgSize += argSize;
 #endif // FEATURE_FASTTAILCALL
