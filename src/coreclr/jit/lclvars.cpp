@@ -651,8 +651,8 @@ void Compiler::lvaInitUserArgs(InitVarDscInfo* varDscInfo, unsigned skipArgs, un
         unsigned argSize          = eeGetArgSize(argLst, &info.compMethodInfo->args);
         unsigned cSlots =
             (argSize + TARGET_POINTER_SIZE - 1) / TARGET_POINTER_SIZE; // the total number of slots of this argument
-        bool      isHfaArg = false;
-        var_types hfaType  = TYP_UNDEF;
+        var_types hfaType  = GetHfaType(typeHnd);
+        bool      isHfaArg = varTypeIsValidHfaType(hfaType);
 
 #if defined(TARGET_ARM64) && defined(TARGET_UNIX)
         // Native varargs on arm64 unix use the regular calling convention.
@@ -666,8 +666,6 @@ void Compiler::lvaInitUserArgs(InitVarDscInfo* varDscInfo, unsigned skipArgs, un
             if (varTypeIsStruct(argType))
             {
                 // hfaType is set to float, double, or SIMD type if it is an HFA, otherwise TYP_UNDEF
-                hfaType  = GetHfaType(typeHnd);
-                isHfaArg = varTypeIsValidHfaType(hfaType);
             }
         }
         else if (info.compIsVarArgs)
