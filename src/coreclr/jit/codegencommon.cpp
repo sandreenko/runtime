@@ -11837,6 +11837,7 @@ void CodeGen::genMultiRegStoreToLocal(GenTreeLclVar* lclNode)
             unsigned   fieldLclNum = varDsc->lvFieldLclStart + i;
             LclVarDsc* fieldVarDsc = compiler->lvaGetDesc(fieldLclNum);
             var_types  destType    = fieldVarDsc->TypeGet();
+            assert(destType == srcType);
             if (varReg != REG_NA)
             {
                 hasRegs = true;
