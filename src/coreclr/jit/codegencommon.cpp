@@ -11814,7 +11814,7 @@ void CodeGen::genMultiRegStoreToLocal(GenTreeLclVar* lclNode)
     // For our example, the register allocator would simple spill r1 because the first def requires it.
     // The code generator would move r3  to r1, leave r2 alone, and then load the spilled value into r3.
 
-    int  offset        = 0;
+    unsigned  offset        = 0;
     bool isMultiRegVar = lclNode->IsMultiRegLclVar();
     bool hasRegs       = false;
 
@@ -11822,6 +11822,7 @@ void CodeGen::genMultiRegStoreToLocal(GenTreeLclVar* lclNode)
     {
         assert(compiler->lvaEnregMultiRegVars);
         assert(regCount == varDsc->lvFieldCnt);
+
     }
     for (unsigned i = 0; i < regCount; ++i)
     {
@@ -11837,7 +11838,20 @@ void CodeGen::genMultiRegStoreToLocal(GenTreeLclVar* lclNode)
             unsigned   fieldLclNum = varDsc->lvFieldLclStart + i;
             LclVarDsc* fieldVarDsc = compiler->lvaGetDesc(fieldLclNum);
             var_types  destType    = fieldVarDsc->TypeGet();
-            assert(destType == srcType);
+            //assert(destType == srcType);
+            if (destType != srcType)
+            {
+                printf("mismatching types, (MethodHash=%08x)", compiler->info.compMethodHash());
+                if (varReg == REG_NA)
+                {
+                    printf(", copy to memory");
+                }
+                if (varTypeIsSmall(destType) != varTypeIsSmall(srcType))
+                {
+                    printf(", small types involved");
+                }
+                printf("\n");
+            }
             if (varReg != REG_NA)
             {
                 hasRegs = true;
@@ -11882,6 +11896,7 @@ void CodeGen::genMultiRegStoreToLocal(GenTreeLclVar* lclNode)
     }
     else
     {
+        assert((offset == varDsc->lvSize()) || (varDsc->lvIsHfa() && (offset == varDsc->lvExactSize)));
         genUpdateLife(lclNode);
         varDsc->SetRegNum(REG_STK);
     }
