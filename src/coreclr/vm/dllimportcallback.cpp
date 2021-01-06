@@ -143,7 +143,7 @@ static_assert_no_msg((sizeof(SLOT) & 1) == 0);
 VOID UMEntryThunk::CompileUMThunkWorker(UMThunkStubInfo *pInfo,
                                         CPUSTUBLINKER *pcpusl,
                                         UINT *psrcofsregs, // NUM_ARGUMENT_REGISTERS elements
-                                        UINT *psrcofs,     // pInfo->m_cbDstStack/STACK_ELEM_SIZE elements
+                                        UINT *psrcofs,     // pInfo->m_cbDstStack/TARGET_POINTER_SIZE elements
                                         UINT retbufofs)    // the large structure return buffer ptr arg offset (if any)
 {
     STANDARD_VM_CONTRACT;
@@ -348,7 +348,7 @@ VOID UMEntryThunk::CompileUMThunkWorker(UMThunkStubInfo *pInfo,
     }
 
     // repush any stack arguments
-    int arg = pInfo->m_cbDstStack/STACK_ELEM_SIZE;
+    int arg = pInfo->m_cbDstStack/TARGET_POINTER_SIZE;
 
     while (arg--)
     {
@@ -666,13 +666,13 @@ Stub *UMThunkMarshInfo::CompileNExportThunk(LoaderHeap *pLoaderHeap, PInvokeStat
     ArgIterator argit(pMetaSig);
 
     UINT nStackBytes = argit.SizeOfArgStack();
-    _ASSERTE((nStackBytes % STACK_ELEM_SIZE) == 0);
+    _ASSERTE((nStackBytes % TARGET_POINTER_SIZE) == 0);
 
     // size of stack passed to us from unmanaged, may be bigger that nStackBytes if there are
     // parameters with copy constructors where we perform value-to-reference transformation
     UINT nStackBytesIncoming = nStackBytes;
 
-    UINT *psrcofs = (UINT *)_alloca((nStackBytes / STACK_ELEM_SIZE) * sizeof(UINT));
+    UINT *psrcofs = (UINT *)_alloca((nStackBytes / TARGET_POINTER_SIZE) * sizeof(UINT));
     UINT psrcofsregs[NUM_ARGUMENT_REGISTERS];
     UINT retbufofs = UNUSED_STACK_OFFSET;
 
@@ -683,7 +683,7 @@ Stub *UMThunkMarshInfo::CompileNExportThunk(LoaderHeap *pLoaderHeap, PInvokeStat
 
     UINT nOffset = 0;
     int numRegistersUsed = 0;
-    int numStackSlotsIndex = nStackBytes / STACK_ELEM_SIZE;
+    int numStackSlotsIndex = nStackBytes / TARGET_POINTER_SIZE;
     
     // This could have been set in the UnmanagedCallersOnly scenario.
     if (m_callConv == UINT16_MAX)
@@ -762,12 +762,12 @@ Stub *UMThunkMarshInfo::CompileNExportThunk(LoaderHeap *pLoaderHeap, PInvokeStat
         else
         {
             // stack slots will get incoming stack slots (we may need more stack slots for larger parameters)
-            for (UINT nSlotOfs = StackElemSize(cbSize); nSlotOfs > 0; nSlotOfs -= STACK_ELEM_SIZE)
+            for (UINT nSlotOfs = StackElemSize(cbSize); nSlotOfs > 0; nSlotOfs -= TARGET_POINTER_SIZE)
             {
                 // note the reverse order here which is necessary to maintain
                 // the original layout of the structure (it'll be reversed once
                 // more when repushing)
-                psrcofs[--numStackSlotsIndex] = MAKE_BYVAL_STACK_OFFSET(nOffset + nSlotOfs - STACK_ELEM_SIZE);
+                psrcofs[--numStackSlotsIndex] = MAKE_BYVAL_STACK_OFFSET(nOffset + nSlotOfs - TARGET_POINTER_SIZE);
             }
         }
 
@@ -775,7 +775,7 @@ Stub *UMThunkMarshInfo::CompileNExportThunk(LoaderHeap *pLoaderHeap, PInvokeStat
     }
     _ASSERTE(numStackSlotsIndex == 0);
 
-    UINT cbActualArgSize = nStackBytesIncoming + (numRegistersUsed * STACK_ELEM_SIZE);
+    UINT cbActualArgSize = nStackBytesIncoming + (numRegistersUsed * TARGET_POINTER_SIZE);
 
     if (!fIsStatic)
     {
@@ -1335,8 +1335,8 @@ VOID UMThunkMarshInfo::RunTimeInit()
     {
         // callee should pop retbuf
         numRegistersUsed += 1;
-        offs += STACK_ELEM_SIZE;
-        cbRetPop += STACK_ELEM_SIZE;
+        offs += TARGET_POINTER_SIZE;
+        cbRetPop += TARGET_POINTER_SIZE;
     }
 #endif // UNIX_X86_ABI
 
@@ -1347,7 +1347,7 @@ VOID UMThunkMarshInfo::RunTimeInit()
         int cbSize = sig.GetElemSize(type, thValueType);
         if (ArgIterator::IsArgumentInRegister(&numRegistersUsed, type, thValueType))
         {
-            offs += STACK_ELEM_SIZE;
+            offs += TARGET_POINTER_SIZE;
         }
         else
         {
@@ -1419,7 +1419,7 @@ VOID UMThunkMarshInfo::SetupArguments(char *pSrc, ArgumentRegisters *pArgRegs, c
         // Pass retbuf via Ecx
         numRegistersUsed += 1;
         pArgRegs->Ecx = *((UINT32 *)pCurSrc);
-        pCurSrc += STACK_ELEM_SIZE;
+        pCurSrc += TARGET_POINTER_SIZE;
     }
 #endif // UNIX_X86_ABI
 
@@ -1432,7 +1432,7 @@ VOID UMThunkMarshInfo::SetupArguments(char *pSrc, ArgumentRegisters *pArgRegs, c
 
         if (ArgIterator::IsArgumentInRegister(&numRegistersUsed, type, thValueType))
         {
-            _ASSERTE(elemSize == STACK_ELEM_SIZE);
+            _ASSERTE(elemSize == TARGET_POINTER_SIZE);
 
             if (numRegistersUsed == 1)
                 pArgRegs->Ecx = *((UINT32 *)pCurSrc);

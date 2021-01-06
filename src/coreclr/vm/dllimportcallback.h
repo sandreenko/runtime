@@ -190,7 +190,7 @@ private:
                                             // On non-x86, the managed entrypoint for no-delegate no-marshal signatures
 #ifdef TARGET_X86
     UINT32            m_cbActualArgSize;    // caches m_pSig.SizeOfFrameArgumentArray()
-                                            // On x86/Linux we have to augment with numRegistersUsed * STACK_ELEM_SIZE
+                                            // On x86/Linux we have to augment with numRegistersUsed * TARGET_POINTER_SIZE
     UINT16            m_cbRetPop;           // stack bytes popped by callee (for UpdateRegDisplay)
 #ifdef FEATURE_STUBS_AS_IL
     UINT32            m_cbStackArgSize;     // stack bytes pushed for managed code
