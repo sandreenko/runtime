@@ -9,19 +9,19 @@ using TestLibrary;
 unsafe partial class GenericsNative
 {
     [DllImport(nameof(GenericsNative))]
-    public static extern Vector128<bool> GetVector128B(bool e00, bool e01, bool e02, bool e03, bool e04, bool e05, bool e06, bool e07, bool e08, bool e09, bool e10, bool e11, bool e12, bool e13, bool e14, bool e15);
+    public static extern Vector128<bool> GetVector128B([MarshalAsUnmanagedType.U1]bool e00, [MarshalAsUnmanagedType.U1]bool e01, [MarshalAsUnmanagedType.U1]bool e02, [MarshalAsUnmanagedType.U1]bool e03, [MarshalAsUnmanagedType.U1]bool e04, [MarshalAsUnmanagedType.U1]bool e05, [MarshalAsUnmanagedType.U1]bool e06, [MarshalAsUnmanagedType.U1]bool e07, [MarshalAsUnmanagedType.U1]bool e08, [MarshalAsUnmanagedType.U1]bool e09, [MarshalAsUnmanagedType.U1]bool e10, [MarshalAsUnmanagedType.U1]bool e11, [MarshalAsUnmanagedType.U1]bool e12, [MarshalAsUnmanagedType.U1]bool e13, [MarshalAsUnmanagedType.U1]bool e14, [MarshalAsUnmanagedType.U1]bool e15);
 
     [DllImport(nameof(GenericsNative))]
-    public static extern void GetVector128BOut(bool e00, bool e01, bool e02, bool e03, bool e04, bool e05, bool e06, bool e07, bool e08, bool e09, bool e10, bool e11, bool e12, bool e13, bool e14, bool e15, Vector128<bool>* value);
+    public static extern void GetVector128BOut([MarshalAsUnmanagedType.U1]bool e00, [MarshalAsUnmanagedType.U1]bool e01, [MarshalAsUnmanagedType.U1]bool e02, [MarshalAsUnmanagedType.U1]bool e03, [MarshalAsUnmanagedType.U1]bool e04, [MarshalAsUnmanagedType.U1]bool e05, [MarshalAsUnmanagedType.U1]bool e06, [MarshalAsUnmanagedType.U1]bool e07, [MarshalAsUnmanagedType.U1]bool e08, [MarshalAsUnmanagedType.U1]bool e09, [MarshalAsUnmanagedType.U1]bool e10, [MarshalAsUnmanagedType.U1]bool e11, [MarshalAsUnmanagedType.U1]bool e12, [MarshalAsUnmanagedType.U1]bool e13, [MarshalAsUnmanagedType.U1]bool e14, [MarshalAsUnmanagedType.U1]bool e15, Vector128<bool>* value);
 
     [DllImport(nameof(GenericsNative))]
-    public static extern void GetVector128BOut(bool e00, bool e01, bool e02, bool e03, bool e04, bool e05, bool e06, bool e07, bool e08, bool e09, bool e10, bool e11, bool e12, bool e13, bool e14, bool e15, out Vector128<bool> value);
+    public static extern void GetVector128BOut([MarshalAsUnmanagedType.U1]bool e00, [MarshalAsUnmanagedType.U1]bool e01, [MarshalAsUnmanagedType.U1]bool e02, [MarshalAsUnmanagedType.U1]bool e03, [MarshalAsUnmanagedType.U1]bool e04, [MarshalAsUnmanagedType.U1]bool e05, [MarshalAsUnmanagedType.U1]bool e06, [MarshalAsUnmanagedType.U1]bool e07, [MarshalAsUnmanagedType.U1]bool e08, [MarshalAsUnmanagedType.U1]bool e09, [MarshalAsUnmanagedType.U1]bool e10, [MarshalAsUnmanagedType.U1]bool e11, [MarshalAsUnmanagedType.U1]bool e12, [MarshalAsUnmanagedType.U1]bool e13, [MarshalAsUnmanagedType.U1]bool e14, [MarshalAsUnmanagedType.U1]bool e15, out Vector128<bool> value);
 
     [DllImport(nameof(GenericsNative))]
-    public static extern Vector128<bool>* GetVector128BPtr(bool e00, bool e01, bool e02, bool e03, bool e04, bool e05, bool e06, bool e07, bool e08, bool e09, bool e10, bool e11, bool e12, bool e13, bool e14, bool e15);
+    public static extern Vector128<bool>* GetVector128BPtr([MarshalAsUnmanagedType.U1]bool e00, [MarshalAsUnmanagedType.U1]bool e01, [MarshalAsUnmanagedType.U1]bool e02, [MarshalAsUnmanagedType.U1]bool e03, [MarshalAsUnmanagedType.U1]bool e04, [MarshalAsUnmanagedType.U1]bool e05, [MarshalAsUnmanagedType.U1]bool e06, [MarshalAsUnmanagedType.U1]bool e07, [MarshalAsUnmanagedType.U1]bool e08, [MarshalAsUnmanagedType.U1]bool e09, [MarshalAsUnmanagedType.U1]bool e10, [MarshalAsUnmanagedType.U1]bool e11, [MarshalAsUnmanagedType.U1]bool e12, [MarshalAsUnmanagedType.U1]bool e13, [MarshalAsUnmanagedType.U1]bool e14, [MarshalAsUnmanagedType.U1]bool e15);
 
     [DllImport(nameof(GenericsNative), EntryPoint = "GetVector128BPtr")]
-    public static extern ref readonly Vector128<bool> GetVector128BRef(bool e00, bool e01, bool e02, bool e03, bool e04, bool e05, bool e06, bool e07, bool e08, bool e09, bool e10, bool e11, bool e12, bool e13, bool e14, bool e15);
+    public static extern ref readonly Vector128<bool> GetVector128BRef([MarshalAsUnmanagedType.U1]bool e00, [MarshalAsUnmanagedType.U1]bool e01, [MarshalAsUnmanagedType.U1]bool e02, [MarshalAsUnmanagedType.U1]bool e03, [MarshalAsUnmanagedType.U1]bool e04, [MarshalAsUnmanagedType.U1]bool e05, [MarshalAsUnmanagedType.U1]bool e06, [MarshalAsUnmanagedType.U1]bool e07, [MarshalAsUnmanagedType.U1]bool e08, [MarshalAsUnmanagedType.U1]bool e09, [MarshalAsUnmanagedType.U1]bool e10, [MarshalAsUnmanagedType.U1]bool e11, [MarshalAsUnmanagedType.U1]bool e12, [MarshalAsUnmanagedType.U1]bool e13, [MarshalAsUnmanagedType.U1]bool e14, [MarshalAsUnmanagedType.U1]bool e15);
 
     [DllImport(nameof(GenericsNative))]
     public static extern Vector128<bool> AddVector128B(Vector128<bool> lhs, Vector128<bool> rhs);
