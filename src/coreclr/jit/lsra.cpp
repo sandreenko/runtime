@@ -1486,7 +1486,7 @@ bool LinearScan::isRegCandidate(LclVarDsc* varDsc)
     // or enregistered, on x86 -- it is believed that we can enregister pinned (more properly, "pinning")
     // references when using the general GC encoding.
     unsigned lclNum = (unsigned)(varDsc - compiler->lvaTable);
-    if (varDsc->lvAddrExposed || !varTypeIsEnregisterable(varDsc))
+    if (varDsc->lvAddrExposed || (!varTypeIsEnregisterable(varDsc) && (varDsc->GetRegisterType() == TYP_UNDEF)))
     {
 #ifdef DEBUG
         Compiler::DoNotEnregisterReason dner = Compiler::DNER_AddrExposed;
@@ -1521,7 +1521,7 @@ bool LinearScan::isRegCandidate(LclVarDsc* varDsc)
         return false;
     }
 
-    switch (genActualType(varDsc->TypeGet()))
+    switch (genActualType(varDsc->GetRegisterType()))
     {
 #if CPU_HAS_FP_SUPPORT
         case TYP_FLOAT:
@@ -1545,8 +1545,6 @@ bool LinearScan::isRegCandidate(LclVarDsc* varDsc)
 #endif // FEATURE_SIMD
 
         case TYP_STRUCT:
-            return false;
-
         case TYP_UNDEF:
         case TYP_UNKNOWN:
             noway_assert(!"lvType not set correctly");

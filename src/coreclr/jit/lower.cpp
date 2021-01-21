@@ -1338,9 +1338,26 @@ void Lowering::LowerArg(GenTreeCall* call, GenTree** ppArg)
         GenTree* bitcast = comp->gtNewBitCastNode(TYP_LONG, arg);
         BlockRange().InsertAfter(arg, bitcast);
 
-        *ppArg = arg = bitcast;
+        arg    = bitcast;
+        *ppArg = arg;
+
         assert(info->GetNode() == arg);
         type = TYP_LONG;
+    }
+    else if (type == TYP_STRUCT)
+    {
+        assert(arg->OperIs(GT_LCL_VAR));
+        const unsigned   lclNum  = arg->AsLclVar()->GetLclNum();
+        const LclVarDsc* varDsc  = comp->lvaGetDesc(lclNum);
+        var_types        regType = varDsc->GetRegisterType();
+        assert(regType != TYP_UNDEF);
+
+        GenTree* bitcast = comp->gtNewBitCastNode(regType, arg);
+        BlockRange().InsertAfter(arg, bitcast);
+        arg    = bitcast;
+        *ppArg = arg;
+        assert(info->GetNode() == arg);
+        type = regType;
     }
 #endif // defined(TARGET_X86)
 #endif // defined(FEATURE_SIMD)

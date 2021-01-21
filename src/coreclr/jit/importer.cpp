@@ -1384,6 +1384,7 @@ GenTree* Compiler::impAssignStructPtr(GenTree*             destAddr,
                 {
                     // We change this to a GT_LCL_FLD (from a GT_ADDR of a GT_LCL_VAR)
                     lcl->ChangeOper(GT_LCL_FLD);
+                    varDsc->lvFieldAccessed = 1;
                     fgLclFldAssign(lclNum);
                     lcl->gtType = src->gtType;
                     asgType     = src->gtType;
@@ -1829,9 +1830,16 @@ GenTree* Compiler::impNormStructVal(GenTree*             structVal,
 
         case GT_LCL_VAR:
         case GT_LCL_FLD:
-            structLcl = structVal->AsLclVarCommon();
-            // Wrap it in a GT_OBJ.
-            structVal = gtNewObjNode(structHnd, gtNewOperNode(GT_ADDR, TYP_BYREF, structVal));
+        {
+            structLcl                  = structVal->AsLclVarCommon();
+            const LclVarDsc* lclVar    = lvaGetDesc(structLcl);
+            ClassLayout*     argLayout = typGetObjLayout(structHnd);
+            // Wrap it in a GT_OBJ, if needed.
+            if (forceNormalization || !ClassLayout::AreCompatible(lclVar->GetLayout(), argLayout))
+            {
+                structVal = gtNewObjNode(structHnd, gtNewOperNode(GT_ADDR, TYP_BYREF, structVal));
+            }
+        }
             FALLTHROUGH;
 
         case GT_OBJ:
@@ -1936,11 +1944,11 @@ GenTree* Compiler::impNormStructVal(GenTree*             structVal,
             structLcl = gtNewLclvNode(tmpNum, structType)->AsLclVarCommon();
             structVal = structLcl;
         }
-        if ((forceNormalization || (structType == TYP_STRUCT)) && !structVal->OperIsBlk())
-        {
-            // Wrap it in a GT_OBJ
-            structVal = gtNewObjNode(structHnd, gtNewOperNode(GT_ADDR, TYP_BYREF, structVal));
-        }
+        // if ((forceNormalization || (structType == TYP_STRUCT)) && !structVal->OperIsBlk())
+        //{
+        //    // Wrap it in a GT_OBJ
+        //    structVal = gtNewObjNode(structHnd, gtNewOperNode(GT_ADDR, TYP_BYREF, structVal));
+        //}
     }
 
     if (structLcl != nullptr)
@@ -9733,10 +9741,12 @@ REDO_RETURN_NODE:
     {
         // It is possible that we now have a lclVar of scalar type.
         // If so, don't transform it to GT_LCL_FLD.
-        LclVarDsc* varDsc = lvaGetDesc(op->AsLclVarCommon());
-        if (genActualType(varDsc->TypeGet()) != genActualType(info.compRetNativeType))
+        unsigned   lclNum = op->AsLclVar()->GetLclNum();
+        LclVarDsc* varDsc = lvaGetDesc(lclNum);
+        if (varDsc->lvType != info.compRetNativeType)
         {
             op->ChangeOper(GT_LCL_FLD);
+            varDsc->lvFieldAccessed = 1;
         }
     }
     else if (op->gtOper == GT_OBJ)

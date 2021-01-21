@@ -4515,7 +4515,8 @@ void CodeGen::genCodeForStoreLclVar(GenTreeLclVar* lclNode)
             else if (op1->GetRegNum() != targetReg)
             {
                 assert(op1->GetRegNum() != REG_NA);
-                emit->emitInsBinary(ins_Move_Extend(targetType, true), emitTypeSize(lclNode), lclNode, op1);
+                var_types lclType = varDsc->GetRegisterType();
+                emit->emitInsBinary(ins_Move_Extend(targetType, true), emitTypeSize(lclType), lclNode, op1);
             }
         }
         if (targetReg != REG_NA)

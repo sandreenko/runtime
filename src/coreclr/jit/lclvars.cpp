@@ -2104,6 +2104,13 @@ bool Compiler::StructPromotionHelper::ShouldPromoteStructVar(unsigned lclNum)
         // TODO-1stClassStructs: a temporary solution to keep diffs small, it will be fixed later.
         shouldPromote = false;
     }
+    else if ((structPromotionInfo.fieldCnt > 1) && !varDsc->lvFieldAccessed)
+    {
+        JITDUMP("Not promoting promotable struct local V%02u: #fields = %d because can put the whole struct into a "
+                "register\n",
+                lclNum, structPromotionInfo.fieldCnt);
+        shouldPromote = false;
+    }
 
     //
     // If the lvRefCnt is zero and we have a struct promoted parameter we can end up with an extra store of
@@ -7243,6 +7250,24 @@ void Compiler::lvaDumpEntry(unsigned lclNum, FrameLayoutState curState, size_t r
         }
 
         gtDispLclVar(lclNum);
+
+        if (varDsc->lvDoNotEnregister)
+        {
+            printf("don't enreg, ");
+        }
+        else
+        {
+            printf("enreg, ");
+        }
+
+        if (varDsc->lvRegStruct)
+        {
+            printf("a reg struct, ");
+        }
+        else
+        {
+            printf("not a reg struct, ");
+        }
 
         printf("[V%02u", lclNum);
         if (varDsc->lvTracked)

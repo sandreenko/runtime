@@ -996,6 +996,23 @@ public:
         return GetLayout()->GetRegisterType();
     }
 
+    //------------------------------------------------------------------------
+    // GetRegisterType: Determine register type for that local var.
+    //
+    //
+    // Return Value:
+    //    TYP_UNDEF if the layout is enregistrable, register type otherwise.
+    //
+    var_types GetRegisterType() const
+    {
+        if (TypeGet() != TYP_STRUCT)
+        {
+            return TypeGet();
+        }
+        assert(m_layout != nullptr);
+        return m_layout->GetRegisterType();
+    }
+
     bool CanBeReplacedWithItsField(Compiler* comp) const;
 
 #ifdef DEBUG
