@@ -864,14 +864,14 @@ void CodeGen::genSpillVar(GenTree* tree)
         // therefore be store-normalized (rather than load-normalized). In fact, not performing store normalization
         // can lead to problems on architectures where a lclVar may be allocated to a register that is not
         // addressable at the granularity of the lclVar's defined type (e.g. x86).
-        var_types lclTyp = genActualType(varDsc->TypeGet());
-        emitAttr  size   = emitTypeSize(lclTyp);
+        var_types spillType = genActualType(varDsc->GetRegisterType(tree->AsLclVar()));
+        emitAttr  size      = emitTypeSize(spillType);
 
         // If this is a write-thru variable, we don't actually spill at a use, but we will kill the var in the reg
         // (below).
         if (!varDsc->lvLiveInOutOfHndlr)
         {
-            instruction storeIns = ins_Store(lclTyp, compiler->isSIMDTypeLocalAligned(varNum));
+            instruction storeIns = ins_Store(spillType, compiler->isSIMDTypeLocalAligned(varNum));
             assert(varDsc->GetRegNum() == tree->GetRegNum());
             inst_TT_RV(storeIns, size, tree, tree->GetRegNum());
         }
@@ -1181,27 +1181,27 @@ void CodeGen::genUnspillRegIfNeeded(GenTree* tree)
 
             GenTreeLclVar* lcl       = unspillTree->AsLclVar();
             LclVarDsc*     varDsc    = compiler->lvaGetDesc(lcl->GetLclNum());
-            var_types      spillType = unspillTree->TypeGet();
+            var_types      spillType = varDsc->GetRegisterType(lcl);
 
 // TODO-Cleanup: The following code could probably be further merged and cleaned up.
 #ifdef TARGET_XARCH
-            // Load local variable from its home location.
-            // In most cases the tree type will indicate the correct type to use for the load.
-            // However, if it is NOT a normalizeOnLoad lclVar (i.e. NOT a small int that always gets
-            // widened when loaded into a register), and its size is not the same as genActualType of
-            // the type of the lclVar, then we need to change the type of the tree node when loading.
-            // This situation happens due to "optimizations" that avoid a cast and
-            // simply retype the node when using long type lclVar as an int.
-            // While loading the int in that case would work for this use of the lclVar, if it is
-            // later used as a long, we will have incorrectly truncated the long.
-            // In the normalizeOnLoad case ins_Load will return an appropriate sign- or zero-
-            // extending load.
+// Load local variable from its home location.
+// In most cases the tree type will indicate the correct type to use for the load.
+// However, if it is NOT a normalizeOnLoad lclVar (i.e. NOT a small int that always gets
+// widened when loaded into a register), and its size is not the same as genActualType of
+// the type of the lclVar, then we need to change the type of the tree node when loading.
+// This situation happens due to "optimizations" that avoid a cast and
+// simply retype the node when using long type lclVar as an int.
+// While loading the int in that case would work for this use of the lclVar, if it is
+// later used as a long, we will have incorrectly truncated the long.
+// In the normalizeOnLoad case ins_Load will return an appropriate sign- or zero-
+// extending load.
 
-            if (spillType != genActualType(varDsc->lvType) && !varTypeIsGC(spillType) && !varDsc->lvNormalizeOnLoad())
-            {
-                assert(!varTypeIsGC(varDsc));
-                spillType = genActualType(varDsc->lvType);
-            }
+// if (spillType != genActualType(varDsc->lvType) && !varTypeIsGC(spillType) && !varDsc->lvNormalizeOnLoad())
+//{
+//    assert(!varTypeIsGC(varDsc));
+//    spillType = genActualType(varDsc->lvType);
+//}
 #elif defined(TARGET_ARM64)
             var_types targetType = unspillTree->gtType;
             if (spillType != genActualType(varDsc->lvType) && !varTypeIsGC(spillType) && !varDsc->lvNormalizeOnLoad())
@@ -1928,19 +1928,26 @@ void CodeGen::genConsumeBlockSrc(GenTreeBlk* blkNode)
     GenTree* src = blkNode->Data();
     if (blkNode->OperIsCopyBlkOp())
     {
-        // For a CopyBlk we need the address of the source.
-        assert(src->isContained());
-        if (src->OperGet() == GT_IND)
+        if (src->isContained())
         {
-            src = src->AsOp()->gtOp1;
+            // For a CopyBlk we need the address of the source.
+            if (src->OperGet() == GT_IND)
+            {
+                src = src->AsOp()->gtOp1;
+            }
+            else
+            {
+                // This must be a local.
+                // For this case, there is no source address register, as it is a
+                // stack-based address.
+                assert(src->OperIsLocal());
+                return;
+            }
         }
         else
         {
-            // This must be a local.
-            // For this case, there is no source address register, as it is a
-            // stack-based address.
             assert(src->OperIsLocal());
-            return;
+            assert(src->GetReg() != REG_NA);
         }
     }
     else
@@ -2060,7 +2067,8 @@ void CodeGen::genSpillLocal(unsigned varNum, var_types type, GenTreeLclVar* lclN
     {
         // Store local variable to its home location.
         // Ensure that lclVar stores are typed correctly.
-        GetEmitter()->emitIns_S_R(ins_Store(type, compiler->isSIMDTypeLocalAligned(varNum)), emitTypeSize(type), regNum,
+        var_types spillType = genActualType(varDsc->GetRegisterType(lclNode));
+        GetEmitter()->emitIns_S_R(ins_Store(spillType, compiler->isSIMDTypeLocalAligned(varNum)), emitTypeSize(spillType), regNum,
                                   varNum, 0);
     }
 }

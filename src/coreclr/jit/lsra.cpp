@@ -238,6 +238,7 @@ BasicBlock::weight_t LinearScan::getWeight(RefPosition* refPos)
 // in time (more of a 'bank' of registers).
 regMaskTP LinearScan::allRegs(RegisterType rt)
 {
+    assert((rt != TYP_UNDEF) && (rt != TYP_STRUCT));
     if (rt == TYP_FLOAT)
     {
         return availableFloatRegs;
@@ -1495,7 +1496,7 @@ bool LinearScan::isRegCandidate(LclVarDsc* varDsc)
     // or enregistered, on x86 -- it is believed that we can enregister pinned (more properly, "pinning")
     // references when using the general GC encoding.
     unsigned lclNum = (unsigned)(varDsc - compiler->lvaTable);
-    if (varDsc->lvAddrExposed || !varTypeIsEnregisterable(varDsc))
+    if (varDsc->lvAddrExposed || (!varTypeIsEnregisterable(varDsc) && (varDsc->GetRegisterType() == TYP_UNDEF)))
     {
 #ifdef DEBUG
         Compiler::DoNotEnregisterReason dner = Compiler::DNER_AddrExposed;
@@ -1551,6 +1552,10 @@ bool LinearScan::isRegCandidate(LclVarDsc* varDsc)
 #endif // FEATURE_SIMD
 
         case TYP_STRUCT:
+            if (varDsc->GetRegisterType() != TYP_UNDEF && varDsc->lvRegStruct)
+            {
+                return true;
+            }
             return false;
 
         case TYP_UNDEF:
@@ -1771,7 +1776,11 @@ void LinearScan::identifyCandidates()
 
         if (varDsc->lvLRACandidate)
         {
-            var_types type   = genActualType(varDsc->TypeGet());
+            var_types type = genActualType(varDsc->GetRegisterType());
+            if (varTypeUsesFloatReg(type))
+            {
+                compiler->compFloatingPointUsed = true;
+            }
             Interval* newInt = newInterval(type);
             newInt->setLocalNumber(compiler, lclNum, this);
             VarSetOps::AddElemD(compiler, registerCandidateVars, varDsc->lvVarIndex);
@@ -7935,7 +7944,7 @@ void LinearScan::insertMove(
     }
     else
     {
-        var_types movType = genActualType(varDsc->TypeGet());
+        var_types movType = varDsc->GetRegisterType();
         src->gtType       = movType;
 
         dst = new (compiler, GT_COPY) GenTreeCopyOrReload(GT_COPY, movType, src);

@@ -4381,7 +4381,7 @@ void CodeGen::genFnPrologCalleeRegArgs(regNumber xtraReg, bool* pXtraRegClobbere
 
             /* Register argument - hopefully it stays in the same register */
             regNumber destRegNum  = REG_NA;
-            var_types destMemType = varDsc->TypeGet();
+            var_types destMemType = varDsc->GetRegisterType();
 
             if (regArgTab[argNum].slot == 1)
             {
@@ -4673,7 +4673,9 @@ void CodeGen::genEnregisterIncomingStackArgs()
         regNumber regNum = varDsc->GetArgInitReg();
         assert(regNum != REG_STK);
 
-        GetEmitter()->emitIns_R_S(ins_Load(type), emitTypeSize(type), regNum, varNum, 0);
+        var_types regType = varDsc->GetRegisterType();
+
+        GetEmitter()->emitIns_R_S(ins_Load(type), emitTypeSize(regType), regNum, varNum, 0);
         regSet.verifyRegUsed(regNum);
 #ifdef USING_SCOPE_INFO
         psiMoveToReg(varNum);
@@ -4799,7 +4801,7 @@ void CodeGen::genCheckUseBlockInit()
                 unless they are untracked GC type or structs that contain GC pointers */
             CLANG_FORMAT_COMMENT_ANCHOR;
 
-            if ((!varDsc->lvTracked || (varDsc->lvType == TYP_STRUCT)) && varDsc->lvOnFrame)
+            if (!varDsc->lvTracked && varDsc->lvOnFrame)
             {
 
                 varDsc->lvMustInit = true;

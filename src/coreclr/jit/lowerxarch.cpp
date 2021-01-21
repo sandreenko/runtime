@@ -230,6 +230,19 @@ void Lowering::LowerBlockStore(GenTreeBlk* blkNode)
             // address, not knowing that GT_IND is part of a block op that has containment restrictions.
             src->AsIndir()->Addr()->ClearContained();
         }
+        else if (src->OperIs(GT_LCL_VAR))
+        {
+            LclVarDsc* varDsc = comp->lvaGetDesc(src->AsLclVar());
+            if (!varDsc->lvDoNotEnregister)
+            {
+                src->SetRegOptional();
+                src->ClearContained();
+            }
+            else
+            {
+                assert(src->isContained());
+            }
+        }
 
         if (blkNode->OperIs(GT_STORE_OBJ))
         {
@@ -500,19 +513,23 @@ void Lowering::LowerPutArgStk(GenTreePutArgStk* putArgStk)
 #ifdef FEATURE_PUT_STRUCT_ARG_STK
     GenTree* srcAddr = nullptr;
 
+    ClassLayout* layout;
+
     bool haveLocalAddr = false;
-    if ((src->OperGet() == GT_OBJ) || (src->OperGet() == GT_IND))
+    if (src->OperIs(GT_OBJ))
     {
         srcAddr = src->AsOp()->gtOp1;
         assert(srcAddr != nullptr);
         haveLocalAddr = srcAddr->OperIsLocalAddr();
+        layout        = src->AsObj()->GetLayout();
     }
     else
     {
-        assert(varTypeIsSIMD(putArgStk));
+        assert(src->OperIs(GT_LCL_VAR));
+        const GenTreeLclVar* lclVar = src->AsLclVar();
+        const LclVarDsc*     varDsc = comp->lvaGetDesc(lclVar);
+        layout                      = varDsc->GetLayout();
     }
-
-    ClassLayout* layout = src->AsObj()->GetLayout();
 
     // In case of a CpBlk we could use a helper call. In case of putarg_stk we
     // can't do that since the helper call could kill some already set up outgoing args.
@@ -550,14 +567,28 @@ void Lowering::LowerPutArgStk(GenTreePutArgStk* putArgStk)
     {
         putArgStk->gtPutArgStkKind = GenTreePutArgStk::Kind::RepInstr;
     }
-    // Always mark the OBJ and ADDR as contained trees by the putarg_stk. The codegen will deal with this tree.
-    MakeSrcContained(putArgStk, src);
-    if (haveLocalAddr)
+
+    if (src->OperIs(GT_OBJ))
     {
-        // If the source address is the address of a lclVar, make the source address contained to avoid unnecessary
-        // copies.
-        //
-        MakeSrcContained(putArgStk, srcAddr);
+        // Always mark the OBJ and ADDR as contained trees by the putarg_stk. The codegen will deal with this tree.
+        MakeSrcContained(putArgStk, src);
+        if (haveLocalAddr)
+        {
+            // If the source address is the address of a lclVar, make the source address contained to avoid unnecessary
+            // copies.
+            //
+            MakeSrcContained(putArgStk, srcAddr);
+        }
+    }
+    else
+    {
+        assert(src->OperIs(GT_LCL_VAR));
+        const GenTreeLclVar* lclVar = src->AsLclVar();
+        const LclVarDsc*     varDsc = comp->lvaGetDesc(lclVar);
+        if (!varDsc->lvRegStruct)
+        {
+            MakeSrcContained(putArgStk, src);
+        }
     }
 #endif // FEATURE_PUT_STRUCT_ARG_STK
 }

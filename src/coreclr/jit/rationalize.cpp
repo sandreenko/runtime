@@ -473,6 +473,13 @@ void Rationalizer::RewriteAssignment(LIR::Use& use)
                     break;
                 case GT_OBJ:
                     storeOper = GT_STORE_OBJ;
+                    if (value->IsLocal())
+                    {
+                        // TODO-seandree: no need for it.
+                        const GenTreeLclVarCommon* lclVar = value->AsLclVarCommon();
+                        const LclVarDsc*           varDsc = comp->lvaGetDesc(lclVar);
+                        comp->lvaSetVarDoNotEnregister(lclVar->GetLclNum() DEBUGARG(Compiler::DNER_BlockOp));
+                    }
                     break;
                 case GT_DYN_BLK:
                     storeOper                             = GT_STORE_DYN_BLK;
@@ -530,6 +537,12 @@ void Rationalizer::RewriteAddress(LIR::Use& use)
             assert(locationOp == GT_LCL_FLD);
             JITDUMP("Rewriting GT_ADDR(GT_LCL_FLD) to GT_LCL_FLD_ADDR:\n");
         }
+        const GenTreeLclVarCommon* lcl    = location->AsLclVarCommon();
+        const unsigned             lclNum = lcl->GetLclNum();
+        //// TODO-seandree: it should already be set, but lower phases sometimes miss them, probably lclMorph should take
+        //// care of it.
+        //comp->lvaSetVarDoNotEnregister(lclNum DEBUGARG(Compiler::DNER_BlockOp));
+// assert(comp->lvaVarDoNotEnregister(lclNum));
 #endif // DEBUG
 
         location->SetOper(addrForm(locationOp));
