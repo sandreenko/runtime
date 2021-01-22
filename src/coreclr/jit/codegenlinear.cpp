@@ -1175,7 +1175,7 @@ void CodeGen::genUnspillRegIfNeeded(GenTree* tree)
 
             GenTreeLclVar* lcl       = unspillTree->AsLclVar();
             LclVarDsc*     varDsc    = compiler->lvaGetDesc(lcl->GetLclNum());
-            var_types      spillType = unspillTree->TypeGet();
+            var_types      spillType = varDsc->GetRegisterType(lcl);
 
 // TODO-Cleanup: The following code could probably be further merged and cleaned up.
 #ifdef TARGET_XARCH

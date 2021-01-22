@@ -1358,6 +1358,10 @@ void Lowering::LowerArg(GenTreeCall* call, GenTree** ppArg)
         *ppArg = arg;
         assert(info->GetNode() == arg);
         type = regType;
+        if (varTypeIsSmall(type))
+        {
+            type = TYP_INT;
+        }
     }
 #endif // defined(TARGET_X86)
 #endif // defined(FEATURE_SIMD)
