@@ -1191,11 +1191,11 @@ void CodeGen::genUnspillRegIfNeeded(GenTree* tree)
             // In the normalizeOnLoad case ins_Load will return an appropriate sign- or zero-
             // extending load.
 
-            if (spillType != genActualType(varDsc->lvType) && !varTypeIsGC(spillType) && !varDsc->lvNormalizeOnLoad())
-            {
-                assert(!varTypeIsGC(varDsc));
-                spillType = genActualType(varDsc->lvType);
-            }
+            //if (spillType != genActualType(varDsc->lvType) && !varTypeIsGC(spillType) && !varDsc->lvNormalizeOnLoad())
+            //{
+            //    assert(!varTypeIsGC(varDsc));
+            //    spillType = genActualType(varDsc->lvType);
+            //}
 #elif defined(TARGET_ARM64)
             var_types targetType = unspillTree->gtType;
             if (spillType != genActualType(varDsc->lvType) && !varTypeIsGC(spillType) && !varDsc->lvNormalizeOnLoad())
