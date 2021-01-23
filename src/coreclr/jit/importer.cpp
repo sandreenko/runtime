@@ -1944,11 +1944,11 @@ GenTree* Compiler::impNormStructVal(GenTree*             structVal,
             structLcl = gtNewLclvNode(tmpNum, structType)->AsLclVarCommon();
             structVal = structLcl;
         }
-        // if ((forceNormalization || (structType == TYP_STRUCT)) && !structVal->OperIsBlk())
-        //{
-        //    // Wrap it in a GT_OBJ
-        //    structVal = gtNewObjNode(structHnd, gtNewOperNode(GT_ADDR, TYP_BYREF, structVal));
-        //}
+         if (forceNormalization && !structVal->OperIsBlk())
+        {
+            // Wrap it in a GT_OBJ
+            structVal = gtNewObjNode(structHnd, gtNewOperNode(GT_ADDR, TYP_BYREF, structVal));
+        }
     }
 
     if (structLcl != nullptr)
@@ -15713,6 +15713,16 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                     op1 = gtNewOperNode(GT_ADD, TYP_BYREF, op1,
                                         gtNewIconNode(OFFSETOF__CORINFO_TypedReference__type, TYP_I_IMPL));
                     op1 = gtNewOperNode(GT_IND, TYP_BYREF, op1);
+                }
+                else if (op1->IsLocal())
+                {
+                    GenTreeLclVarCommon* lclVar = op1->AsLclVarCommon();
+                    GenTree* addr = gtNewOperNode(GT_ADDR, TYP_BYREF, lclVar);
+                    GenTreeIntCon* offset = gtNewIconNode(OFFSETOF__CORINFO_TypedReference__type, TYP_I_IMPL);
+                    GenTree* add = gtNewOperNode(GT_ADD, TYP_BYREF, addr, offset);
+                    GenTree* ind = gtNewOperNode(GT_IND, TYP_BYREF, add);
+                    op1 = ind;
+
                 }
                 else
                 {
