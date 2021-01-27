@@ -3234,7 +3234,14 @@ void Lowering::LowerStoreLocCommon(GenTreeLclVarCommon* lclStore)
         }
         else if (!src->OperIs(GT_LCL_VAR) || (varDsc->GetLayout()->GetRegisterType() == TYP_UNDEF))
         {
-            GenTreeLclVar* addr = comp->gtNewLclVarAddrNode(lclStore->GetLclNum(), TYP_BYREF);
+            const unsigned lclNum = lclStore->GetLclNum();
+            GenTreeLclVar* addr = comp->gtNewLclVarAddrNode(lclNum, TYP_BYREF);
+            // TODO-seandree: CQ keep it as STORE_LCL_VAR always.
+            // TODO-seandree: CSE structs don't have lvRegStruct, fix this.
+            //assert((varDsc->lvDoNotEnregister == true) || (varDsc->lvRegStruct == true));
+            comp->lvaSetVarDoNotEnregister(lclNum DEBUGARG(Compiler::DNER_BlockOp));
+
+
 
             addr->gtFlags |= GTF_VAR_DEF;
             assert(!addr->IsPartialLclFld(comp));

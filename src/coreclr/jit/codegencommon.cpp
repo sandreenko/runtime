@@ -4610,7 +4610,9 @@ void CodeGen::genEnregisterIncomingStackArgs()
         regNumber regNum = varDsc->GetArgInitReg();
         assert(regNum != REG_STK);
 
-        GetEmitter()->emitIns_R_S(ins_Load(type), emitTypeSize(type), regNum, varNum, 0);
+        var_types  regType = varDsc->GetRegisterType();
+
+        GetEmitter()->emitIns_R_S(ins_Load(type), emitTypeSize(regType), regNum, varNum, 0);
         regSet.verifyRegUsed(regNum);
 #ifdef USING_SCOPE_INFO
         psiMoveToReg(varNum);

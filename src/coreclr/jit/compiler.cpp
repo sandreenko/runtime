@@ -4423,7 +4423,6 @@ void Compiler::compCompile(void** methodCodePtr, uint32_t* methodCodeSize, JitFl
     // Import: convert the instrs in each basic block to a tree based intermediate representation
     //
     DoPhase(this, PHASE_IMPORTATION, &Compiler::fgImport);
-    return;
 
     // If instrumenting, add block and class probes.
     //
@@ -4829,6 +4828,7 @@ void Compiler::compCompile(void** methodCodePtr, uint32_t* methodCodeSize, JitFl
     //
     DoPhase(this, PHASE_COMPUTE_EDGE_WEIGHTS, &Compiler::fgComputeBlockAndEdgeWeights);
 
+
 #if defined(FEATURE_EH_FUNCLETS)
 
     // Create funclets from the EH handlers.
@@ -5049,9 +5049,12 @@ void Compiler::compCompile(void** methodCodePtr, uint32_t* methodCodeSize, JitFl
     }
 #endif
 
+
+
     // rationalize trees
     Rationalizer rat(this); // PHASE_RATIONALIZE
     rat.Run();
+
 
     // Here we do "simple lowering".  When the RyuJIT backend works for all
     // platforms, this will be part of the more general lowering phase.  For now, though, we do a separate
@@ -5105,6 +5108,8 @@ void Compiler::compCompile(void** methodCodePtr, uint32_t* methodCodeSize, JitFl
 
     // We can not add any new tracked variables after this point.
     lvaTrackedFixed = true;
+
+
 
     // Now that lowering is completed we can proceed to perform register allocation
     //

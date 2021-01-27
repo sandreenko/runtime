@@ -628,6 +628,7 @@ int __cdecl main(int argc, char* argv[])
     }
     else if (missingCount > 0)
     {
+        LogVerbose("total %d, missing %d\n", jittedCount, missingCount);
         result = SpmiResult::Misses;
     }
 

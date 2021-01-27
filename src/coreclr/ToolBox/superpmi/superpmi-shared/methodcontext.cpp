@@ -3465,6 +3465,9 @@ void MethodContext::dmpGetStaticFieldCurrentClass(DWORDLONG key, const Agnostic_
 }
 CORINFO_CLASS_HANDLE MethodContext::repGetStaticFieldCurrentClass(CORINFO_FIELD_HANDLE field, bool* pIsSpeculative)
 {
+    AssertCodeMsg(GetStaticFieldCurrentClass != nullptr, EXCEPTIONCODE_MC, "Didn't find anything for %016llX", CastHandle(field));
+    AssertCodeMsg(GetStaticFieldCurrentClass->GetIndex(CastHandle(field)) != -1, EXCEPTIONCODE_MC, "Didn't find %016llX", CastHandle(field));
+
     Agnostic_GetStaticFieldCurrentClass value = GetStaticFieldCurrentClass->Get(CastHandle(field));
 
     if (pIsSpeculative != nullptr)
@@ -4474,7 +4477,7 @@ void MethodContext::dmpGetFieldName(DWORDLONG key, DD value)
 const char* MethodContext::repGetFieldName(CORINFO_FIELD_HANDLE ftn, const char** moduleName)
 {
     DD value;
-    if (GetFieldName == nullptr)
+    if ((GetFieldName == nullptr) || (GetFieldName->GetIndex(CastHandle(ftn)) == -1))
     {
         if (moduleName != nullptr)
             *moduleName = "hackishModuleName";

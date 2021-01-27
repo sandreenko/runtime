@@ -858,14 +858,14 @@ void CodeGen::genSpillVar(GenTree* tree)
         // therefore be store-normalized (rather than load-normalized). In fact, not performing store normalization
         // can lead to problems on architectures where a lclVar may be allocated to a register that is not
         // addressable at the granularity of the lclVar's defined type (e.g. x86).
-        var_types lclTyp = genActualType(varDsc->TypeGet());
-        emitAttr  size   = emitTypeSize(lclTyp);
+        var_types spillType = varDsc->GetRegisterType(tree->AsLclVar());
+        emitAttr  size   = emitTypeSize(spillType);
 
         // If this is a write-thru variable, we don't actually spill at a use, but we will kill the var in the reg
         // (below).
         if (!varDsc->lvLiveInOutOfHndlr)
         {
-            instruction storeIns = ins_Store(lclTyp, compiler->isSIMDTypeLocalAligned(varNum));
+            instruction storeIns = ins_Store(spillType, compiler->isSIMDTypeLocalAligned(varNum));
             assert(varDsc->GetRegNum() == tree->GetRegNum());
             inst_TT_RV(storeIns, size, tree, tree->GetRegNum());
         }
@@ -1913,19 +1913,26 @@ void CodeGen::genConsumeBlockSrc(GenTreeBlk* blkNode)
     GenTree* src = blkNode->Data();
     if (blkNode->OperIsCopyBlkOp())
     {
-        // For a CopyBlk we need the address of the source.
-        assert(src->isContained());
-        if (src->OperGet() == GT_IND)
+        if (src->isContained())
         {
-            src = src->AsOp()->gtOp1;
+            // For a CopyBlk we need the address of the source.
+            if (src->OperGet() == GT_IND)
+            {
+                src = src->AsOp()->gtOp1;
+            }
+            else
+            {
+                // This must be a local.
+                // For this case, there is no source address register, as it is a
+                // stack-based address.
+                assert(src->OperIsLocal());
+                return;
+            }
         }
         else
         {
-            // This must be a local.
-            // For this case, there is no source address register, as it is a
-            // stack-based address.
             assert(src->OperIsLocal());
-            return;
+            assert(src->GetReg() != REG_NA);
         }
     }
     else

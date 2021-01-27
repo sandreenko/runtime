@@ -1521,7 +1521,7 @@ bool LinearScan::isRegCandidate(LclVarDsc* varDsc)
         return false;
     }
 
-    switch (genActualType(varDsc->GetRegisterType()))
+    switch (genActualType(varDsc->TypeGet()))
     {
 #if CPU_HAS_FP_SUPPORT
         case TYP_FLOAT:
@@ -1545,6 +1545,12 @@ bool LinearScan::isRegCandidate(LclVarDsc* varDsc)
 #endif // FEATURE_SIMD
 
         case TYP_STRUCT:
+            if (varDsc->GetRegisterType() != TYP_UNDEF && varDsc->lvRegStruct)
+            {
+                return true;
+            }
+            return false;
+
         case TYP_UNDEF:
         case TYP_UNKNOWN:
             noway_assert(!"lvType not set correctly");
@@ -7905,7 +7911,7 @@ void LinearScan::insertMove(
     }
     else
     {
-        var_types movType = genActualType(varDsc->TypeGet());
+        var_types movType = varDsc->GetRegisterType();
         src->gtType       = movType;
 
         dst = new (compiler, GT_COPY) GenTreeCopyOrReload(GT_COPY, movType, src);

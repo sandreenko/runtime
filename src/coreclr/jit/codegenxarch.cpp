@@ -2890,7 +2890,7 @@ void CodeGen::genCodeForCpBlkUnroll(GenTreeBlk* node)
     int       srcOffset         = 0;
     GenTree*  src               = node->Data();
 
-    assert(src->isContained());
+    assert(src->isContained() || src->OperIs(GT_LCL_VAR));
 
     if (src->OperIs(GT_LCL_VAR, GT_LCL_FLD))
     {
@@ -2940,6 +2940,7 @@ void CodeGen::genCodeForCpBlkUnroll(GenTreeBlk* node)
 
     if (size >= XMM_REGSIZE_BYTES)
     {
+        // TODO-senadree: No need for temp reg.
         regNumber tempReg = node->GetSingleTempReg(RBM_ALLFLOAT);
 
         instruction simdMov = simdUnalignedMovIns();
@@ -2948,7 +2949,22 @@ void CodeGen::genCodeForCpBlkUnroll(GenTreeBlk* node)
         {
             if (srcLclNum != BAD_VAR_NUM)
             {
-                emit->emitIns_R_S(simdMov, EA_ATTR(regSize), tempReg, srcLclNum, srcOffset);
+                if (src->isContained())
+                {
+                    emit->emitIns_R_S(simdMov, EA_ATTR(regSize), tempReg, srcLclNum, srcOffset);
+                }
+                else
+                {
+#if defined(DEBUG)
+                    const LclVarDsc* varDsc =  compiler->lvaGetDesc(srcLclNum);
+                    assert(varTypeIsStruct(varDsc->TypeGet()));
+                    const ClassLayout* layout = varDsc->GetLayout();
+                    assert(layout != nullptr);
+                    assert(regSize == layout->GetSize());
+#endif
+                   emit->emitIns_R_R(simdMov, EA_ATTR(regSize), tempReg, genConsumeReg(src));
+
+                }
             }
             else
             {
@@ -2974,6 +2990,7 @@ void CodeGen::genCodeForCpBlkUnroll(GenTreeBlk* node)
 
     if (size > 0)
     {
+        // TODO-senadree: No need for temp reg.
         regNumber tempReg = node->GetSingleTempReg(RBM_ALLINT);
 
         for (unsigned regSize = REGSIZE_BYTES; size > 0; size -= regSize, srcOffset += regSize, dstOffset += regSize)
@@ -2985,7 +3002,21 @@ void CodeGen::genCodeForCpBlkUnroll(GenTreeBlk* node)
 
             if (srcLclNum != BAD_VAR_NUM)
             {
-                emit->emitIns_R_S(INS_mov, EA_ATTR(regSize), tempReg, srcLclNum, srcOffset);
+                if (src->isContained())
+                {
+                    emit->emitIns_R_S(INS_mov, EA_ATTR(regSize), tempReg, srcLclNum, srcOffset);
+                }
+                else
+                {
+#if defined(DEBUG)
+                    const LclVarDsc* varDsc = compiler->lvaGetDesc(srcLclNum);
+                    assert(varTypeIsStruct(varDsc->TypeGet()));
+                    const ClassLayout * layout = varDsc->GetLayout();
+                    assert(layout != nullptr);
+                    assert(regSize == layout->GetSize());
+#endif
+                    emit->emitIns_R_R(INS_mov, EA_ATTR(regSize), tempReg, genConsumeReg(src));
+                }
             }
             else
             {

@@ -1479,7 +1479,7 @@ public:
                        // struct is passed as a scalar type, this is that type.
                        // Note that if a struct is passed by reference, this will still be the struct type.
 
-    bool needTmp : 1;       // True when we force this argument's evaluation into a temp LclVar
+    bool needTmp;       // True when we force this argument's evaluation into a temp LclVar
     bool needPlace : 1;     // True when we must replace this argument with a placeholder node
     bool isTmp : 1;         // True when we setup a temp LclVar for this argument due to size issues with the struct
     bool processed : 1;     // True when we have decided the evaluation order for this argument in the gtCallLateArgs

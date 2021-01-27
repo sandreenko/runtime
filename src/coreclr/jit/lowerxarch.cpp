@@ -230,6 +230,14 @@ void Lowering::LowerBlockStore(GenTreeBlk* blkNode)
             // address, not knowing that GT_IND is part of a block op that has containment restrictions.
             src->AsIndir()->Addr()->ClearContained();
         }
+        else if (src->OperIs(GT_LCL_VAR))
+        {
+            LclVarDsc* varDsc = comp->lvaGetDesc(src->AsLclVar());
+            if (varDsc->lvRegStruct)
+            {
+                src->ClearContained();
+            }
+        }
 
         if (blkNode->OperIs(GT_STORE_OBJ))
         {

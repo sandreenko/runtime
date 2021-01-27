@@ -1399,10 +1399,10 @@ int LinearScan::BuildBlockStore(GenTreeBlk* blkNode)
             }
         }
 
-        if ((srcAddrOrFill == nullptr) && (srcRegMask != RBM_NONE))
+        if ((srcAddrOrFill == nullptr) && (srcRegMask != RBM_NONE) && src->isContained())
         {
             // This is a local source; we'll use a temp register for its address.
-            assert(src->isContained() && src->OperIs(GT_LCL_VAR, GT_LCL_FLD));
+            assert(src->OperIs(GT_LCL_VAR, GT_LCL_FLD));
             buildInternalIntRegisterDefForNode(blkNode, srcRegMask);
         }
     }
@@ -1436,6 +1436,11 @@ int LinearScan::BuildBlockStore(GenTreeBlk* blkNode)
         {
             useCount += BuildAddrUses(srcAddrOrFill);
         }
+    }
+    else if (!src->isContained())
+    {
+        useCount++;
+        BuildUse(src, srcRegMask);
     }
 
     if (blkNode->OperIs(GT_STORE_DYN_BLK))

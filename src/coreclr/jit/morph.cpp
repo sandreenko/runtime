@@ -2110,10 +2110,6 @@ void fgArgInfo::EvalArgsToTemps()
                 }
 #endif
 
-#if defined(TARGET_AMD64) && !defined(UNIX_AMD64_ABI)
-                noway_assert(argx->gtType != TYP_STRUCT);
-#endif
-
                 unsigned tmpVarNum = compiler->lvaGrabTemp(true DEBUGARG("argument with side effect"));
                 if (argx->gtOper == GT_MKREFANY)
                 {
@@ -3101,11 +3097,12 @@ void Compiler::fgInitArgInfo(GenTreeCall* call)
             objClass = gtGetStructHandle(argx);
             if (argx->TypeGet() == TYP_STRUCT)
             {
-                // For TYP_STRUCT arguments we must have an OBJ, LCL_VAR or MKREFANY
+                // For TYP_STRUCT arguments we must have an OBJ, BLK, LCL_VAR or MKREFANY
                 switch (actualArg->OperGet())
                 {
                     case GT_OBJ:
-                        structSize = actualArg->AsObj()->GetLayout()->GetSize();
+                    case GT_BLK:
+                        structSize = actualArg->AsBlk()->GetLayout()->GetSize();
                         assert(structSize == info.compCompHnd->getClassSize(objClass));
                         break;
                     case GT_LCL_VAR:
@@ -3768,10 +3765,10 @@ GenTreeCall* Compiler::fgMorphArgs(GenTreeCall* call)
             unsigned             originalSize;
             if (argObj->TypeGet() == TYP_STRUCT)
             {
-                if (argObj->OperIs(GT_OBJ))
+                if (argObj->OperIs(GT_OBJ, GT_BLK))
                 {
                     // Get the size off the OBJ node.
-                    originalSize = argObj->AsObj()->GetLayout()->GetSize();
+                    originalSize = argObj->AsBlk()->GetLayout()->GetSize();
                     assert(originalSize == info.compCompHnd->getClassSize(objClass));
                 }
                 else

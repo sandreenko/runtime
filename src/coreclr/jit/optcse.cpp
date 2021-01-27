@@ -2783,6 +2783,7 @@ public:
             }
             assert(structHnd != NO_CLASS_HANDLE);
             m_pCompiler->lvaSetStruct(cseLclVarNum, structHnd, false);
+            m_pCompiler->lvaTable[cseLclVarNum].lvRegStruct = true; // TODO-seandree: too optimistic?
         }
         m_pCompiler->lvaTable[cseLclVarNum].lvType  = cseLclVarTyp;
         m_pCompiler->lvaTable[cseLclVarNum].lvIsCSE = true;
