@@ -1007,6 +1007,12 @@ public:
     {
         if (TypeGet() != TYP_STRUCT)
         {
+#if  !defined(TARGET_64BIT)
+            if (TypeGet() == TYP_LONG)
+            {
+                return TYP_UNDEF;
+            }
+#endif
             return TypeGet();
         }
         assert(m_layout != nullptr);
@@ -1899,6 +1905,7 @@ public:
     // A struct arg must be one of the following:
     // - A node of struct type,
     // - A GT_FIELD_LIST, or
+    // - A GT_CNS_INT from struct init, or
     // - A node of a scalar type, passed in a single register or slot
     //   (or two slots in the case of a struct pass on the stack as TYP_DOUBLE).
     //
@@ -1907,7 +1914,7 @@ public:
         GenTree* node = GetNode();
         if (isStruct)
         {
-            if (!varTypeIsStruct(node) && !node->OperIs(GT_FIELD_LIST))
+            if (!varTypeIsStruct(node) && !node->OperIs(GT_FIELD_LIST, GT_CNS_INT))
             {
                 // This is the case where we are passing a struct as a primitive type.
                 // On most targets, this is always a single register or slot.

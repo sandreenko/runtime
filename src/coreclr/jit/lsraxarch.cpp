@@ -1576,7 +1576,18 @@ int LinearScan::BuildPutArgStk(GenTreePutArgStk* putArgStk)
         return BuildSimple(putArgStk);
     }
 
-    ClassLayout* layout = src->AsObj()->GetLayout();
+    ClassLayout* layout;
+    if (src->OperIs(GT_OBJ))
+    {
+        layout = src->AsObj()->GetLayout();
+    }
+    else
+    {
+        assert(src->OperIs(GT_LCL_VAR));
+        const GenTreeLclVar* lclVar = src->AsLclVar();
+        const LclVarDsc*     varDsc = compiler->lvaGetDesc(lclVar);
+        layout                      = varDsc->GetLayout();
+    }
 
     ssize_t size = putArgStk->GetStackByteSize();
     switch (putArgStk->gtPutArgStkKind)

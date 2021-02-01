@@ -5102,13 +5102,26 @@ void CodeGen::genCallInstruction(GenTreeCall* call)
 #ifdef FEATURE_PUT_STRUCT_ARG_STK
             if (!source->OperIs(GT_FIELD_LIST) && (source->TypeGet() == TYP_STRUCT))
             {
-                GenTreeObj* obj      = source->AsObj();
-                unsigned    argBytes = roundUp(obj->GetLayout()->GetSize(), TARGET_POINTER_SIZE);
+                const ClassLayout* layout;
+
+                if (source->OperIs(GT_OBJ))
+                {
+                    layout = source->AsObj()->GetLayout();
+                }
+                else
+                {
+                    assert(source->OperIs(GT_LCL_VAR));
+                    const GenTreeLclVar* lclVar = source->AsLclVar();
+                    const LclVarDsc* varDsc = compiler->lvaGetDesc(lclVar);
+                    layout = varDsc->GetLayout();
+                }
+                const unsigned    argBytes = roundUp(layout->GetSize(), TARGET_POINTER_SIZE);
 #ifdef TARGET_X86
                 // If we have an OBJ, we must have created a copy if the original arg was not a
                 // local and was not a multiple of TARGET_POINTER_SIZE.
                 // Note that on x64/ux this will be handled by unrolling in genStructPutArgUnroll.
-                assert((argBytes == obj->GetLayout()->GetSize()) || obj->Addr()->IsLocalAddrExpr());
+                assert((argBytes == layout->GetSize()) || source->OperIs(GT_LCL_VAR)
+                    || (source->OperIs(GT_OBJ) && source->AsObj()->Addr()->IsLocalAddrExpr()));
 #endif // TARGET_X86
                 assert((curArgTabEntry->numSlots * TARGET_POINTER_SIZE) == argBytes);
             }
@@ -7357,15 +7370,26 @@ bool CodeGen::genAdjustStackForPutArgStk(GenTreePutArgStk* putArgStk)
     CLANG_FORMAT_COMMENT_ANCHOR;
 
 #ifdef DEBUG
+    const ClassLayout* layout = nullptr;
+    if (source->OperIs(GT_OBJ))
+    {
+        layout = source->AsObj()->GetLayout();
+    }
+    else if(source->OperIs(GT_LCL_VAR))
+    {
+        const GenTreeLclVar* lclVar = source->AsLclVar();
+        const LclVarDsc* varDsc = compiler->lvaGetDesc(lclVar);
+        layout = varDsc->GetLayout();
+    }
     switch (putArgStk->gtPutArgStkKind)
     {
         case GenTreePutArgStk::Kind::RepInstr:
         case GenTreePutArgStk::Kind::Unroll:
-            assert(!source->AsObj()->GetLayout()->HasGCPtr() && (argSize >= 16));
+            assert((argSize >= 16) && (layout != nullptr && !layout->HasGCPtr()));
             break;
         case GenTreePutArgStk::Kind::Push:
         case GenTreePutArgStk::Kind::PushAllSlots:
-            assert(source->OperIs(GT_FIELD_LIST) || source->AsObj()->GetLayout()->HasGCPtr() || (argSize < 16));
+            assert(source->OperIs(GT_FIELD_LIST) || (argSize < 16) || (layout != nullptr && layout->HasGCPtr()));
             break;
         case GenTreePutArgStk::Kind::Invalid:
         default:
@@ -7656,7 +7680,14 @@ void CodeGen::genPutArgStk(GenTreePutArgStk* putArgStk)
         }
         else
         {
-            inst_IV(INS_push, data->AsIntCon()->gtIconVal);
+            // We could have PUTARG_STK(16 bytes) -> CNT_INT int 0 from a struct init assertion prop.
+            unsigned pushedSize = 0;
+            while (pushedSize < argSize)
+            {
+                inst_IV(INS_push, data->AsIntCon()->gtIconVal);
+                pushedSize += genTypeSize(targetType);
+            }
+            assert(pushedSize == argSize);
         }
         AddStackLevel(argSize);
     }
@@ -7906,7 +7937,19 @@ void CodeGen::genPutStructArgStk(GenTreePutArgStk* putArgStk)
         genStoreRegToStackArg(targetType, srcReg, 0);
         return;
     }
+    else if (source->OperIs(GT_LCL_VAR))
+    {
+        regNumber srcReg = genConsumeReg(source);
+        const GenTreeLclVar* lclVar = source->AsLclVar();
+        const LclVarDsc* varDsc = compiler->lvaGetDesc(lclVar);
+        targetType = genActualType(varDsc->GetRegisterType());
+        assert((targetType != TYP_STRUCT) && targetType != TYP_UNDEF);
+        assert(srcReg != REG_NA);
+        genStoreRegToStackArg(targetType, srcReg, 0);
+        return;
+    }
 
+    assert(source->OperIs(GT_OBJ));
     assert(targetType == TYP_STRUCT);
 
     ClassLayout* layout = source->AsObj()->GetLayout();

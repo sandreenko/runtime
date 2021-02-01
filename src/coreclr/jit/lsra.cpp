@@ -238,6 +238,7 @@ BasicBlock::weight_t LinearScan::getWeight(RefPosition* refPos)
 // in time (more of a 'bank' of registers).
 regMaskTP LinearScan::allRegs(RegisterType rt)
 {
+    assert((rt != TYP_UNDEF) && (rt != TYP_STRUCT));
     if (rt == TYP_FLOAT)
     {
         return availableFloatRegs;
@@ -1769,7 +1770,7 @@ void LinearScan::identifyCandidates()
 
         if (varDsc->lvLRACandidate)
         {
-            var_types type   = genActualType(varDsc->TypeGet());
+            var_types type   = genActualType(varDsc->GetRegisterType());
             Interval* newInt = newInterval(type);
             newInt->setLocalNumber(compiler, lclNum, this);
             VarSetOps::AddElemD(compiler, registerCandidateVars, varDsc->lvVarIndex);

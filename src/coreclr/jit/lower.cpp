@@ -1190,8 +1190,6 @@ GenTree* Lowering::NewPutArg(GenTreeCall* call, GenTree* arg, fgArgTabEntry* inf
                 // We use GT_OBJ only for non-lclVar, non-SIMD, non-FIELD_LIST struct arguments.
                 if (arg->OperIsLocal())
                 {
-                    // This must have a type with a known size (SIMD or has been morphed to a primitive type).
-                    assert(arg->TypeGet() != TYP_STRUCT);
                 }
                 else if (arg->OperIs(GT_OBJ))
                 {
@@ -1234,7 +1232,7 @@ GenTree* Lowering::NewPutArg(GenTreeCall* call, GenTree* arg, fgArgTabEntry* inf
                     }
 #endif // TARGET_X86
                 }
-                else if (!arg->OperIs(GT_FIELD_LIST))
+                else if (!arg->OperIs(GT_FIELD_LIST, GT_CNS_INT))
                 {
                     assert(varTypeIsSIMD(arg) || (info->GetStackSlotsNumber() == 1));
                 }
@@ -1277,7 +1275,9 @@ void Lowering::LowerArg(GenTreeCall* call, GenTree** ppArg)
 
     // No assignments should remain by Lowering.
     assert(!arg->OperIs(GT_ASG));
-    assert(!arg->OperIsPutArgStk());
+
+    // If we hit this we are probably double-lowering.
+    assert(!arg->OperIsPutArg());
 
     // Assignments/stores at this level are not really placing an argument.
     // They are setting up temporary locals that will later be placed into
@@ -1366,9 +1366,6 @@ void Lowering::LowerArg(GenTreeCall* call, GenTree** ppArg)
 #endif // defined(TARGET_X86)
 #endif // defined(FEATURE_SIMD)
 
-    // If we hit this we are probably double-lowering.
-    assert(!arg->OperIsPutArg());
-
 #if !defined(TARGET_64BIT)
     if (varTypeIsLong(type))
     {
@@ -1401,6 +1398,34 @@ void Lowering::LowerArg(GenTreeCall* call, GenTree** ppArg)
         assert(info->GetNode() == newArg);
 
         BlockRange().Remove(arg);
+    }
+    else if ((type == TYP_STRUCT) && (info->GetRegNum() != REG_STK))
+    {
+        assert(arg->OperIs(GT_LCL_VAR));
+        const unsigned   lclNum  = arg->AsLclVar()->GetLclNum();
+        const LclVarDsc* varDsc  = comp->lvaGetDesc(lclNum);
+        var_types        regType = varDsc->GetRegisterType();
+        assert(regType != TYP_UNDEF);
+
+        GenTree* bitcast = comp->gtNewBitCastNode(regType, arg);
+        BlockRange().InsertAfter(arg, bitcast);
+        arg    = bitcast;
+        *ppArg = arg;
+        assert(info->GetNode() == arg);
+        type = regType;
+        if (varTypeIsSmall(type))
+        {
+            type = TYP_INT;
+        }
+        GenTree* putArg = NewPutArg(call, arg, info, type);
+
+        // In the case of register passable struct (in one or two registers)
+        // the NewPutArg returns a new node (GT_PUTARG_REG or a GT_FIELD_LIST with two GT_PUTARG_REGs.)
+        // If an extra node is returned, splice it in the right place in the tree.
+        if (arg != putArg)
+        {
+            ReplaceArgWithPutArgOrBitcast(ppArg, putArg);
+        }
     }
     else
 #endif // !defined(TARGET_64BIT)

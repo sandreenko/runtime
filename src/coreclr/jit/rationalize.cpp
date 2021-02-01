@@ -530,6 +530,11 @@ void Rationalizer::RewriteAddress(LIR::Use& use)
             assert(locationOp == GT_LCL_FLD);
             JITDUMP("Rewriting GT_ADDR(GT_LCL_FLD) to GT_LCL_FLD_ADDR:\n");
         }
+        const GenTreeLclVarCommon* lcl = location->AsLclVarCommon();
+        const unsigned lclNum = lcl->GetLclNum();
+        // TODO-seandree: it should already be set, but lower phases sometimes miss them, probably lclMorph should take care of it.
+        comp->lvaSetVarDoNotEnregister(lclNum DEBUGARG(Compiler::DNER_BlockOp));
+        //assert(comp->lvaVarDoNotEnregister(lclNum));
 #endif // DEBUG
 
         location->SetOper(addrForm(locationOp));

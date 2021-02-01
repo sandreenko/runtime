@@ -2148,7 +2148,8 @@ void LinearScan::buildIntervals()
         if (isCandidateVar(argDsc))
         {
             Interval* interval = getIntervalForLocalVar(varIndex);
-            regMaskTP mask     = allRegs(TypeGet(argDsc));
+            const var_types regType = argDsc->GetRegisterType();
+            regMaskTP mask     = allRegs(regType);
             if (argDsc->lvIsRegArg)
             {
                 // Set this interval as currently assigned to that register
@@ -3207,8 +3208,11 @@ void LinearScan::BuildStoreLocDef(GenTreeLclVarCommon* storeLoc,
             srcInterval->assignRelatedInterval(varDefInterval);
         }
     }
+
+    const var_types type = varDsc->GetRegisterType();
+
     RefPosition* def =
-        newRefPosition(varDefInterval, currentLoc + 1, RefTypeDef, storeLoc, allRegs(varDsc->TypeGet()), index);
+        newRefPosition(varDefInterval, currentLoc + 1, RefTypeDef, storeLoc, allRegs(type), index);
     if (varDefInterval->isWriteThru)
     {
         // We always make write-thru defs reg-optional, as we can store them if they don't

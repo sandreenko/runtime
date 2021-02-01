@@ -991,13 +991,13 @@ private:
                 return;
             }
 
-            if ((user == nullptr) || !user->OperIs(GT_ASG))
-            {
-                // TODO-ADDR: Skip TYP_STRUCT indirs for now, unless they're used by an ASG.
-                // At least call args will require extra work because currently they must be
-                // wrapped in OBJ nodes so we can't replace those with local nodes.
-                return;
-            }
+            //if ((user == nullptr) || !user->OperIs(GT_ASG))
+            //{
+            //    // TODO-ADDR: Skip TYP_STRUCT indirs for now, unless they're used by an ASG.
+            //    // At least call args will require extra work because currently they must be
+            //    // wrapped in OBJ nodes so we can't replace those with local nodes.
+            //    return;
+            //}
 
             if (indir->OperIs(GT_FIELD))
             {

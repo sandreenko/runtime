@@ -4016,9 +4016,10 @@ GenTreeCall* Compiler::fgMorphArgs(GenTreeCall* call)
                         // There are a few special cases where we can omit using a CopyBlk
                         // where we normally would need to use one.
 
-                        if (argObj->OperIs(GT_OBJ) &&
-                            argObj->AsObj()->gtGetOp1()->IsLocalAddrExpr() != nullptr) // Is the source a LclVar?
+                        if (argObj->OperIs(GT_LCL_VAR)
+                            || (argObj->OperIs(GT_OBJ) && argObj->AsObj()->gtGetOp1()->IsLocalAddrExpr() != nullptr))
                         {
+                            // If the source is a local var we can omit a CopyBlk.
                             copyBlkClass = NO_CLASS_HANDLE;
                         }
                     }
@@ -5980,10 +5981,10 @@ GenTree* Compiler::fgMorphLocalVar(GenTree* tree, bool forceRemorph)
         GenTree* newTree = fgMorphStackArgForVarArgs(lclNum, varType, 0);
         if (newTree != nullptr)
         {
-            if (newTree->OperIsBlk() && ((tree->gtFlags & GTF_VAR_DEF) == 0))
-            {
-                newTree->SetOper(GT_IND);
-            }
+            //if (newTree->OperIsBlk() && ((tree->gtFlags & GTF_VAR_DEF) == 0))
+            //{
+            //    newTree->SetOper(GT_IND);
+            //}
             return newTree;
         }
     }
@@ -10207,6 +10208,15 @@ GenTree* Compiler::fgMorphInitBlock(GenTree* tree)
             {
                 lvaSetVarDoNotEnregister(destLclNum DEBUGARG(DNER_BlockOp));
             }
+#if !defined(TARGET_64BIT)
+            else if (!destDoFldAsg && destLclVar->lvRegStruct && !dest->IsLocal() && blockSize == 8)
+            {
+                // TODO-seandree: it is a double lclVar init, using a struct init block, will support it later.
+                lvaSetVarDoNotEnregister(destLclNum DEBUGARG(DNER_BlockOp));
+            }
+
+                 
+#endif // !defined(TARGET_64BIT)
         }
 
         if (!destDoFldAsg)
@@ -10714,12 +10724,13 @@ GenTree* Compiler::fgMorphBlockOperand(GenTree* tree, var_types asgType, unsigne
 
         if (lclNode != nullptr)
         {
-            LclVarDsc* varDsc = &(lvaTable[lclNode->GetLclNum()]);
+            const unsigned lclNum = lclNode->GetLclNum();
+            const LclVarDsc* varDsc = lvaGetDesc(lclNum);
             if (varTypeIsStruct(varDsc) && (varDsc->lvExactSize == blockWidth) && (varDsc->lvType == asgType))
             {
                 if (effectiveVal != lclNode)
                 {
-                    JITDUMP("Replacing block node [%06d] with lclVar V%02u\n", dspTreeID(tree), lclNode->GetLclNum());
+                    JITDUMP("Replacing block node [%06d] with lclVar V%02u\n", dspTreeID(tree), lclNum);
                     effectiveVal = lclNode;
                 }
                 needsIndirection = false;
@@ -10728,6 +10739,8 @@ GenTree* Compiler::fgMorphBlockOperand(GenTree* tree, var_types asgType, unsigne
             {
                 // This may be a lclVar that was determined to be address-exposed.
                 effectiveVal->gtFlags |= (lclNode->gtFlags & GTF_ALL_EFFECT);
+                // TODO-seandree: we keep IND(ADDR()), don't enreg, but we could get rid of it.
+                lvaSetVarDoNotEnregister(lclNum DEBUGARG(DNER_BlockOp));
             }
         }
         if (needsIndirection)

@@ -4796,6 +4796,7 @@ void Compiler::compCompile(void** methodCodePtr, uint32_t* methodCodeSize, JitFl
         // We can now enable all phase checking
         activePhaseChecks = PhaseChecks::CHECK_ALL;
     };
+
     DoPhase(this, PHASE_MORPH_GLOBAL, morphGlobalPhase);
 
     // GS security checks for unsafe buffers
@@ -5054,7 +5055,6 @@ void Compiler::compCompile(void** methodCodePtr, uint32_t* methodCodeSize, JitFl
     // rationalize trees
     Rationalizer rat(this); // PHASE_RATIONALIZE
     rat.Run();
-
 
     // Here we do "simple lowering".  When the RyuJIT backend works for all
     // platforms, this will be part of the more general lowering phase.  For now, though, we do a separate
