@@ -648,6 +648,19 @@ HCIMPLEND
 
 #if !defined(TARGET_X86) || defined(TARGET_UNIX)
 
+#if defined(TARGET_ARM64)
+HCIMPL1_V(INT64, JIT_Dbl2Lng, double val)
+{
+    FCALL_CONTRACT;
+    if (val >= 1.7976931348623157E+308) // and all other special cases here.
+    {
+        return 0;
+    }
+
+    return((INT64)val);
+}
+HCIMPLEND
+#else // !TARGET_ARM64
 HCIMPL1_V(INT64, JIT_Dbl2Lng, double val)
 {
     FCALL_CONTRACT;
@@ -655,6 +668,7 @@ HCIMPL1_V(INT64, JIT_Dbl2Lng, double val)
     return((INT64)val);
 }
 HCIMPLEND
+#endif // !TARGET_ARM64
 
 HCIMPL1_V(int, JIT_Dbl2IntOvf, double val)
 {

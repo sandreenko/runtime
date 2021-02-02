@@ -487,12 +487,16 @@ CONFIG_STRING(JitFunctionFile, W("JitFunctionFile"))
 //    2: force all frames to use the frame types that save FP/LR registers with the callee-saved registers (at the top
 //    of the frame)
 CONFIG_INTEGER(JitSaveFpLrWithCalleeSavedRegisters, W("JitSaveFpLrWithCalleeSavedRegisters"), 0)
+
+
+CONFIG_INTEGER(JitUseHelperDoubleUint, W("JitUseHelperDoubleUint"), 0) // Allow Jit to retype structs as primitive types
+                                                                       // when possible.
+
 #endif // defined(TARGET_ARM64)
 #endif // DEBUG
 
 CONFIG_INTEGER(JitDoOldStructRetyping, W("JitDoOldStructRetyping"), 0) // Allow Jit to retype structs as primitive types
                                                                        // when possible.
-
 #undef CONFIG_INTEGER
 #undef CONFIG_STRING
 #undef CONFIG_METHODSET

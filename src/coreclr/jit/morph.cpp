@@ -202,8 +202,16 @@ GenTree* Compiler::fgMorphCast(GenTree* tree)
             /* Note that if we need to use a helper call then we can not morph oper */
             if (!tree->gtOverflow())
             {
-#ifdef TARGET_ARM64 // On ARM64 All non-overflow checking conversions can be optimized
-                goto OPTIMIZECAST;
+#ifdef TARGET_ARM64 
+                if ((tree->CastToType() == TYP_UINT) && (srcType == TYP_DOUBLE) && JitConfig.JitUseHelperDoubleUint())
+                {
+                    return fgMorphCastIntoHelper(tree, CORINFO_HELP_DBL2UINT, oper);
+                }
+                else
+                {
+                    // On ARM64 All other non-overflow checking conversions can be optimized
+                    goto OPTIMIZECAST;
+                }
 #else
                 switch (dstType)
                 {
