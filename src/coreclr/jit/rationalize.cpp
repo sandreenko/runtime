@@ -473,6 +473,13 @@ void Rationalizer::RewriteAssignment(LIR::Use& use)
                     break;
                 case GT_OBJ:
                     storeOper = GT_STORE_OBJ;
+                    if (value->IsLocal())
+                    {
+                        // TODO-seandree: no need for it.
+                        const GenTreeLclVarCommon* lclVar = value->AsLclVarCommon();
+                        const LclVarDsc* varDsc = comp->lvaGetDesc(lclVar);
+                        comp->lvaSetVarDoNotEnregister(lclVar->GetLclNum() DEBUGARG(Compiler::DNER_BlockOp));
+                    }
                     break;
                 case GT_DYN_BLK:
                     storeOper                             = GT_STORE_DYN_BLK;
