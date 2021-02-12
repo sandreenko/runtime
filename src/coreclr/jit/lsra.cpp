@@ -1771,6 +1771,10 @@ void LinearScan::identifyCandidates()
         if (varDsc->lvLRACandidate)
         {
             var_types type   = genActualType(varDsc->GetRegisterType());
+            if (varTypeUsesFloatReg(type))
+            {
+                compiler->compFloatingPointUsed = true;
+            }
             Interval* newInt = newInterval(type);
             newInt->setLocalNumber(compiler, lclNum, this);
             VarSetOps::AddElemD(compiler, registerCandidateVars, varDsc->lvVarIndex);
