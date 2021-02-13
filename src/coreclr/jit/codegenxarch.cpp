@@ -4546,7 +4546,7 @@ void CodeGen::genCodeForStoreLclVar(GenTreeLclVar* lclNode)
             else if (op1->GetRegNum() != targetReg)
             {
                 assert(op1->GetRegNum() != REG_NA);
-                var_types lclType = varDsc->GetRegisterType();
+                var_types lclType = genActualType(varDsc->GetRegisterType());
                 emit->emitInsBinary(ins_Move_Extend(targetType, true), emitTypeSize(lclType), lclNode, op1);
             }
         }
@@ -7939,20 +7939,38 @@ void CodeGen::genPutStructArgStk(GenTreePutArgStk* putArgStk)
     }
     else if (source->OperIs(GT_LCL_VAR))
     {
-        regNumber srcReg = genConsumeReg(source);
         const GenTreeLclVar* lclVar = source->AsLclVar();
-        const LclVarDsc* varDsc = compiler->lvaGetDesc(lclVar);
-        targetType = genActualType(varDsc->GetRegisterType());
-        assert((targetType != TYP_STRUCT) && targetType != TYP_UNDEF);
-        assert(srcReg != REG_NA);
-        genStoreRegToStackArg(targetType, srcReg, 0);
-        return;
+        regNumber targetReg = lclVar->GetRegNum();
+        if (targetReg != REG_NA)
+        {
+
+            regNumber srcReg = genConsumeReg(source);
+            const LclVarDsc* varDsc = compiler->lvaGetDesc(lclVar);
+            targetType = genActualType(varDsc->GetRegisterType());
+            assert((targetType != TYP_STRUCT) && targetType != TYP_UNDEF);
+            assert(srcReg != REG_NA);
+            genStoreRegToStackArg(targetType, srcReg, 0);
+            return;
+        }
     }
 
-    assert(source->OperIs(GT_OBJ));
+    assert(source->OperIs(GT_OBJ, GT_LCL_VAR));
     assert(targetType == TYP_STRUCT);
 
-    ClassLayout* layout = source->AsObj()->GetLayout();
+    ClassLayout* layout;
+    if (source->OperIs(GT_OBJ))
+    {
+        layout = source->AsObj()->GetLayout();
+    }
+    else
+    {
+        // TODO-seandree: find how to do this.
+        assert("NYI");
+        assert(source->OperIs(GT_LCL_VAR));
+        const GenTreeLclVar* lclVar = source->AsLclVar();
+        const LclVarDsc* varDsc = compiler->lvaGetDesc(lclVar);
+        layout = varDsc->GetLayout();
+    }
 
     if (!layout->HasGCPtr())
     {
