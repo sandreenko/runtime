@@ -11359,7 +11359,7 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
                 // srcAddr is complex expression. Clone and spill it (unless the destination is
                 // a struct local that only has one field, in which case we'd only use the
                 // address value once...)
-                if (destLclVar->lvFieldCnt > 1)
+                if ((destLclVar->lvFieldCnt > 1) && (srcLclNum == BAD_VAR_NUM))
                 {
                     addrSpill = gtCloneExpr(srcAddr); // addrSpill represents the 'srcAddr'
                     noway_assert(addrSpill != nullptr);
@@ -11392,7 +11392,7 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
                 // destAddr is complex expression. Clone and spill it (unless
                 // the source is a struct local that only has one field, in which case we'd only
                 // use the address value once...)
-                if (srcLclVar->lvFieldCnt > 1)
+                if ((srcLclVar->lvFieldCnt > 1) && (destLclNum == BAD_VAR_NUM))
                 {
                     addrSpill = gtCloneExpr(destAddr); // addrSpill represents the 'destAddr'
                     noway_assert(addrSpill != nullptr);
@@ -11531,18 +11531,30 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
                     FieldSeqNode* curFieldSeq = GetFieldSeqStore()->CreateSingleton(fieldHnd);
 
                     unsigned srcFieldOffset = lvaGetDesc(srcFieldLclNum)->lvFldOffset;
+                    var_types srcType = srcFieldVarDsc->TypeGet();
 
-                    if (srcFieldOffset == 0)
+                    if (destLclNum == BAD_VAR_NUM)
                     {
-                        fgAddFieldSeqForZeroOffset(dstFld, curFieldSeq);
+
+                        if (srcFieldOffset == 0)
+                        {
+                            fgAddFieldSeqForZeroOffset(dstFld, curFieldSeq);
+                        }
+                        else
+                        {
+                            GenTree* fieldOffsetNode = gtNewIconNode(srcFieldVarDsc->lvFldOffset, curFieldSeq);
+                            dstFld = gtNewOperNode(GT_ADD, TYP_BYREF, dstFld, fieldOffsetNode);
+                        }
+
+                        dstFld = gtNewIndir(srcFieldVarDsc->TypeGet(), dstFld);
                     }
                     else
                     {
-                        GenTree* fieldOffsetNode = gtNewIconNode(srcFieldVarDsc->lvFldOffset, curFieldSeq);
-                        dstFld                   = gtNewOperNode(GT_ADD, TYP_BYREF, dstFld, fieldOffsetNode);
+                        dstFld = gtNewLclFldNode(destLclNum, srcType, srcFieldOffset);
+                        dstFld->AsLclFld()->SetFieldSeq(curFieldSeq);
+                        // TODO-senadree: remove this and implement storing to enreged struct in reg.
+                        lvaSetVarDoNotEnregister(destLclNum  DEBUGARG(DNER_LocalField));
                     }
-
-                    dstFld = gtNewIndir(srcFieldVarDsc->TypeGet(), dstFld);
 
                     // !!! The destination could be on stack. !!!
                     // This flag will let us choose the correct write barrier.
@@ -11624,16 +11636,27 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
                     if (!done)
                     {
                         unsigned fldOffset = lvaGetDesc(dstFieldLclNum)->lvFldOffset;
-                        if (fldOffset == 0)
+                        if (srcLclNum == BAD_VAR_NUM)
                         {
-                            fgAddFieldSeqForZeroOffset(srcFld, curFieldSeq);
+                            if (fldOffset == 0)
+                            {
+                                fgAddFieldSeqForZeroOffset(srcFld, curFieldSeq);
+                            }
+                            else
+                            {
+                                GenTreeIntCon* fldOffsetNode = gtNewIconNode(fldOffset, curFieldSeq);
+                                srcFld = gtNewOperNode(GT_ADD, TYP_BYREF, srcFld, fldOffsetNode);
+                            }
+                            srcFld = gtNewIndir(destType, srcFld);
                         }
                         else
                         {
-                            GenTreeIntCon* fldOffsetNode = gtNewIconNode(fldOffset, curFieldSeq);
-                            srcFld                       = gtNewOperNode(GT_ADD, TYP_BYREF, srcFld, fldOffsetNode);
+
+                            srcFld = gtNewLclFldNode(srcLclNum, destType, fldOffset);
+                            srcFld->AsLclFld()->SetFieldSeq(curFieldSeq);
+                            // TODO-senadree: remove this and implement storing to enreged struct in reg.
+                            lvaSetVarDoNotEnregister(srcLclNum  DEBUGARG(DNER_LocalField));
                         }
-                        srcFld = gtNewIndir(destType, srcFld);
                     }
                 }
             }
