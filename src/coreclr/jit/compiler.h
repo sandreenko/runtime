@@ -417,6 +417,7 @@ public:
     unsigned char lvDoNotEnregister : 1; // Do not enregister this variable.
     unsigned char lvFieldAccessed : 1;   // The var is a struct local, and a field of the variable is accessed.  Affects
                                          // struct promotion.
+    unsigned char lvCopiedStruct : 1; // The var is a struct local, and it was copied from or to another lcl.
     unsigned char lvLiveInOutOfHndlr : 1; // The variable is live in or out of an exception handler, and therefore must
                                           // be on the stack (at least at those boundaries.)
 

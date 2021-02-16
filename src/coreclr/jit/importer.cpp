@@ -1368,35 +1368,34 @@ GenTree* Compiler::impAssignStructPtr(GenTree*             destAddr,
                 // If it is a multi-reg struct return, don't change the oper to GT_LCL_FLD.
                 // That is, the IR will be of the form lclVar = call for multi-reg return
                 //
-                GenTreeLclVar* lcl    = destAddr->AsOp()->gtOp1->AsLclVar();
-                unsigned       lclNum = lcl->GetLclNum();
-                LclVarDsc*     varDsc = lvaGetDesc(lclNum);
+                GenTreeLclVar* dstlcl    = destAddr->AsOp()->gtOp1->AsLclVar();
+                unsigned       dstlclNum = dstlcl->GetLclNum();
+                LclVarDsc*     dstVarDsc = lvaGetDesc(dstlclNum);
                 if (src->AsCall()->HasMultiRegRetVal())
                 {
                     // Mark the struct LclVar as used in a MultiReg return context
                     //  which currently makes it non promotable.
                     // TODO-1stClassStructs: Eliminate this pessimization when we can more generally
                     // handle multireg returns.
-                    lcl->gtFlags |= GTF_DONT_CSE;
-                    varDsc->lvIsMultiRegRet = true;
+                    dstlcl->gtFlags |= GTF_DONT_CSE;
+                    dstVarDsc->lvIsMultiRegRet = true;
                 }
-                else if ((lcl->gtType != src->gtType) && compDoOldStructRetyping())
+                else if ((dstlcl->gtType != src->gtType) && compDoOldStructRetyping())
                 {
                     // We change this to a GT_LCL_FLD (from a GT_ADDR of a GT_LCL_VAR)
-                    lcl->ChangeOper(GT_LCL_FLD);
-                    varDsc->lvFieldAccessed = 1;
-                    fgLclFldAssign(lclNum);
-                    lcl->gtType = src->gtType;
+                    dstlcl->ChangeOper(GT_LCL_FLD);
+                    dstVarDsc->lvFieldAccessed = 1;
+                    fgLclFldAssign(dstlclNum);
+                    dstlcl->gtType = src->gtType;
                     asgType     = src->gtType;
                 }
-
-                dest = lcl;
+                dest = dstlcl;
 
 #if defined(TARGET_ARM)
                 // TODO-Cleanup: This should have been taken care of in the above HasMultiRegRetVal() case,
                 // but that method has not been updadted to include ARM.
-                impMarkLclDstNotPromotable(lclNum, src, structHnd);
-                lcl->gtFlags |= GTF_DONT_CSE;
+                impMarkLclDstNotPromotable(dstlclNum, src, structHnd);
+                dstlcl->gtFlags |= GTF_DONT_CSE;
 #elif defined(UNIX_AMD64_ABI)
                 // Not allowed for FEATURE_CORCLR which is the only SKU available for System V OSs.
                 assert(!src->AsCall()->IsVarargs() && "varargs not allowed for System V OSs.");
@@ -1406,8 +1405,8 @@ GenTree* Compiler::impAssignStructPtr(GenTree*             destAddr,
                 // handle multireg returns.
                 // TODO-Cleanup: Why is this needed here? This seems that it will set this even for
                 // non-multireg returns.
-                lcl->gtFlags |= GTF_DONT_CSE;
-                varDsc->lvIsMultiRegRet = true;
+                dstlcl->gtFlags |= GTF_DONT_CSE;
+                dstVarDsc->lvIsMultiRegRet = true;
 #endif
             }
             else // we don't have a GT_ADDR of a GT_LCL_VAR
@@ -1541,6 +1540,17 @@ GenTree* Compiler::impAssignStructPtr(GenTree*             destAddr,
     else if (src->IsLocal())
     {
         asgType = src->TypeGet();
+
+        if ((destAddr->gtOper == GT_ADDR) && (destAddr->AsOp()->gtOp1->gtOper == GT_LCL_VAR))
+        {
+            GenTreeLclVar* dstlcl    = destAddr->AsOp()->gtOp1->AsLclVar();
+            unsigned       dstlclNum = dstlcl->GetLclNum();
+            LclVarDsc*     dstVarDsc = lvaGetDesc(dstlclNum);
+
+            LclVarDsc* srcDsc         = lvaGetDesc(src->AsLclVar());
+            srcDsc->lvCopiedStruct    = 1;
+            dstVarDsc->lvCopiedStruct = 1;
+        }
     }
     else if (asgType == TYP_STRUCT)
     {

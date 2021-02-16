@@ -2104,7 +2104,7 @@ bool Compiler::StructPromotionHelper::ShouldPromoteStructVar(unsigned lclNum)
         // TODO-1stClassStructs: a temporary solution to keep diffs small, it will be fixed later.
         shouldPromote = false;
     }
-    else if ((structPromotionInfo.fieldCnt > 1) && !varDsc->lvFieldAccessed)
+    else if ((structPromotionInfo.fieldCnt > 1) && !varDsc->lvFieldAccessed && !varDsc->lvCopiedStruct)
     {
         JITDUMP("Not promoting promotable struct local V%02u: #fields = %d because can put the whole struct into a "
                 "register\n",

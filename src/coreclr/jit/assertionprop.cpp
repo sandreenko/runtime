@@ -1202,11 +1202,55 @@ AssertionIndex Compiler::optCreateAssertion(GenTree*         op1,
                     goto SUBRANGE_COMMON;
 
                 case GT_LCL_FLD:
+                {
+                    //
+                    // Must either be an OAK_EQUAL or an OAK_NOT_EQUAL assertion
+                    //
+                    if ((assertionKind != OAK_EQUAL) && (assertionKind != OAK_NOT_EQUAL))
+                    {
+                        goto DONE_ASSERTION; // Don't make an assertion
+                    }
 
-                    /* Assigning the result of an indirection into a LCL_VAR, see if we can add a subrange assertion */
+                    unsigned lclNum2 = op2->AsLclVarCommon()->GetLclNum();
+                    noway_assert(lclNum2 < lvaCount);
+                    LclVarDsc* lclVar2 = &lvaTable[lclNum2];
 
-                    toType = op2->gtType;
-                    goto SUBRANGE_COMMON;
+                    // If the two locals are the same then bail
+                    if (lclNum == lclNum2)
+                    {
+                        goto DONE_ASSERTION; // Don't make an assertion
+                    }
+
+                    // If the types are different then bail */
+                    if (lclVar->lvType != lclVar2->lvType)
+                    {
+                        goto DONE_ASSERTION; // Don't make an assertion
+                    }
+
+                    // If we're making a copy of a "normalize on load" lclvar then the destination
+                    // has to be "normalize on load" as well, otherwise we risk skipping normalization.
+                    if (lclVar2->lvNormalizeOnLoad() && !lclVar->lvNormalizeOnLoad())
+                    {
+                        goto DONE_ASSERTION; // Don't make an assertion
+                    }
+
+                    //  If the local variable has its address exposed then bail
+                    if (lclVar2->lvAddrExposed)
+                    {
+                        goto DONE_ASSERTION; // Don't make an assertion
+                    }
+
+                    assertion.op2.kind       = O2K_LCLVAR_COPY;
+                    assertion.op2.lcl.lclNum = lclNum2;
+                    assertion.op2.vn         = vnStore->VNConservativeNormalValue(op2->gtVNPair);
+                    assertion.op2.lcl.ssaNum = op2->AsLclVarCommon()->GetSsaNum();
+
+                    //
+                    // Ok everything has been set and the assertion looks good
+                    //
+                    assertion.assertionKind = assertionKind;
+                }
+                break;
 
                 case GT_IND:
 
