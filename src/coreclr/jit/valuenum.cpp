@@ -6931,16 +6931,16 @@ void Compiler::fgValueNumberBlockAssignment(GenTree* tree)
 
                 // Now we need to get the proper RHS.
                 GenTreeLclVarCommon* rhsLclVarTree = nullptr;
-                LclVarDsc*           rhsVarDsc     = nullptr;
                 FieldSeqNode*        rhsFldSeq     = nullptr;
                 ValueNumPair         rhsVNPair;
-                bool                 isNewUniq = false;
+                bool                 isNewUniq      = false;
+                CORINFO_CLASS_HANDLE rhsClassHandle = NO_CLASS_HANDLE;
                 if (!rhs->OperIsIndir())
                 {
                     if (rhs->IsLocalExpr(this, &rhsLclVarTree, &rhsFldSeq))
                     {
                         unsigned rhsLclNum = rhsLclVarTree->GetLclNum();
-                        rhsVarDsc          = &lvaTable[rhsLclNum];
+
                         if (!lvaInSsa(rhsLclNum) || rhsFldSeq == FieldSeqStore::NotAField())
                         {
                             rhsVNPair.SetBoth(vnStore->VNForExpr(compCurBB, rhsLclVarTree->TypeGet()));
@@ -6948,10 +6948,10 @@ void Compiler::fgValueNumberBlockAssignment(GenTree* tree)
                         }
                         else
                         {
-                            rhsVNPair = lvaTable[rhsLclVarTree->GetLclNum()]
-                                            .GetPerSsaData(rhsLclVarTree->GetSsaNum())
-                                            ->m_vnPair;
-                            var_types indType = rhsLclVarTree->TypeGet();
+                            LclVarDsc* rhsVarDsc = lvaGetDesc(rhsLclNum);
+                            rhsClassHandle       = rhsVarDsc->GetStructHnd();
+                            rhsVNPair            = rhsVarDsc->GetPerSsaData(rhsLclVarTree->GetSsaNum())->m_vnPair;
+                            var_types indType    = rhsLclVarTree->TypeGet();
 
                             rhsVNPair = vnStore->VNPairApplySelectors(rhsVNPair, rhsFldSeq, indType);
                         }
@@ -6969,25 +6969,34 @@ void Compiler::fgValueNumberBlockAssignment(GenTree* tree)
                     if (srcAddr->IsLocalAddrExpr(this, &rhsLclVarTree, &rhsFldSeq))
                     {
                         unsigned rhsLclNum = rhsLclVarTree->GetLclNum();
-                        rhsVarDsc          = &lvaTable[rhsLclNum];
                         if (!lvaInSsa(rhsLclNum) || rhsFldSeq == FieldSeqStore::NotAField())
                         {
                             isNewUniq = true;
                         }
                         else
                         {
-                            rhsVNPair = lvaTable[rhsLclVarTree->GetLclNum()]
-                                            .GetPerSsaData(rhsLclVarTree->GetSsaNum())
-                                            ->m_vnPair;
-                            var_types indType = rhsLclVarTree->TypeGet();
-
-                            rhsVNPair = vnStore->VNPairApplySelectors(rhsVNPair, rhsFldSeq, indType);
+                            LclVarDsc* rhsVarDsc = lvaGetDesc(rhsLclNum);
+                            if (varTypeIsStruct(rhsVarDsc))
+                            {
+                                rhsClassHandle    = rhsVarDsc->GetStructHnd();
+                                rhsVNPair         = rhsVarDsc->GetPerSsaData(rhsLclVarTree->GetSsaNum())->m_vnPair;
+                                var_types indType = rhsLclVarTree->TypeGet();
+                                rhsVNPair         = vnStore->VNPairApplySelectors(rhsVNPair, rhsFldSeq, indType);
+                            }
+                            else
+                            {
+                                isNewUniq = true;
+                                JITDUMP("    *** Generate unique VN for not a struct Src/RHS of COPYBLK\n");
+                            }
                         }
                     }
                     else if (vnStore->GetVNFunc(vnStore->VNLiberalNormalValue(srcAddr->gtVNPair), &srcAddrFuncApp))
                     {
                         if (srcAddrFuncApp.m_func == VNF_PtrToStatic)
                         {
+                            // The code below looks dead, lets try to find if anybody uses it.
+                            assert(false && "expected to be unreached");
+
                             var_types     indType            = lclVarTree->TypeGet();
                             ValueNum      fieldSeqVN         = srcAddrFuncApp.m_args[0];
                             FieldSeqNode* fldSeqForStaticVar = vnStore->FieldSeqVNToFieldSeq(fieldSeqVN);
@@ -6999,6 +7008,9 @@ void Compiler::fgValueNumberBlockAssignment(GenTree* tree)
                                 assert(fldSeqForStaticVar->GetTail() == zeroOffsetFldSeq);
                             }
 #endif
+                            CORINFO_FIELD_HANDLE fieldHnd = fldSeqForStaticVar->GetTail()->GetFieldHandle();
+                            info.compCompHnd->getFieldType(fieldHnd, &rhsClassHandle);
+
                             if (fldSeqForStaticVar != FieldSeqStore::NotAField())
                             {
                                 // We model statics as indices into GcHeap (which is a subset of ByrefExposed).
@@ -7020,6 +7032,9 @@ void Compiler::fgValueNumberBlockAssignment(GenTree* tree)
                         }
                         else if (srcAddrFuncApp.m_func == VNF_PtrToArrElem)
                         {
+                            rhsClassHandle =
+                                CORINFO_CLASS_HANDLE(vnStore->ConstantValue<ssize_t>(srcAddrFuncApp.m_args[0]));
+
                             ValueNum elemLib =
                                 fgValueNumberArrIndexVal(nullptr, &srcAddrFuncApp, vnStore->VNForEmptyExcSet());
                             rhsVNPair.SetLiberal(elemLib);
@@ -7044,9 +7059,34 @@ void Compiler::fgValueNumberBlockAssignment(GenTree* tree)
                     isNewUniq = true;
                 }
 
+                assert((rhsClassHandle != NO_CLASS_HANDLE) || isNewUniq);
+                if (rhsClassHandle == NO_CLASS_HANDLE)
+                {
+                    isNewUniq = true;
+                    JITDUMP("    *** Missing class handle for Source/RHS of COPYBLK\n");
+                }
+                LclVarDsc* lhsVarDsc = lvaGetDesc(lhsLclNum);
+                if (!varTypeIsStruct(lhsVarDsc))
+                {
+                    isNewUniq = true;
+                    JITDUMP("    *** Generate unique VN for not a struct Dst/LHS of COPYBLK\n");
+                }
+                else
+                {
+                    CORINFO_CLASS_HANDLE lhsClassHandle = lhsVarDsc->GetStructHnd();
+                    assert(lhsClassHandle != NO_CLASS_HANDLE);
+                    if (lhsClassHandle != rhsClassHandle)
+                    {
+                        isNewUniq = true;
+                        JITDUMP("    *** Mismatched class handle betwen Source/RHS  and Dest/LHS of COPYBLK\n");
+                    }
+                }
+
+                ValueNumPair lhsVNPair;
+
                 if (isNewUniq)
                 {
-                    rhsVNPair.SetBoth(vnStore->VNForExpr(compCurBB, lclVarTree->TypeGet()));
+                    lhsVNPair.SetBoth(vnStore->VNForExpr(compCurBB, lclVarTree->TypeGet()));
                 }
                 else // We will assign rhsVNPair into a map[lhsFldSeq]
                 {
@@ -7059,19 +7099,19 @@ void Compiler::fgValueNumberBlockAssignment(GenTree* tree)
                         // and we won't have any other values in the map
                         ValueNumPair uniqueMap;
                         uniqueMap.SetBoth(vnStore->VNForExpr(compCurBB, lclVarTree->TypeGet()));
-                        rhsVNPair = vnStore->VNPairApplySelectorsAssign(uniqueMap, lhsFldSeq, rhsVNPair,
+                        lhsVNPair = vnStore->VNPairApplySelectorsAssign(uniqueMap, lhsFldSeq, rhsVNPair,
                                                                         lclVarTree->TypeGet(), compCurBB);
                     }
                     else
                     {
                         ValueNumPair oldLhsVNPair =
                             lvaTable[lhsLclNum].GetPerSsaData(lclVarTree->GetSsaNum())->m_vnPair;
-                        rhsVNPair = vnStore->VNPairApplySelectorsAssign(oldLhsVNPair, lhsFldSeq, rhsVNPair,
+                        lhsVNPair = vnStore->VNPairApplySelectorsAssign(oldLhsVNPair, lhsFldSeq, rhsVNPair,
                                                                         lclVarTree->TypeGet(), compCurBB);
                     }
                 }
 
-                lvaTable[lhsLclNum].GetPerSsaData(lclDefSsaNum)->m_vnPair = vnStore->VNPNormalPair(rhsVNPair);
+                lvaTable[lhsLclNum].GetPerSsaData(lclDefSsaNum)->m_vnPair = vnStore->VNPNormalPair(lhsVNPair);
 
 #ifdef DEBUG
                 if (verbose)

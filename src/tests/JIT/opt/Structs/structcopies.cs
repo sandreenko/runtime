@@ -457,12 +457,12 @@ namespace TestStructFields
 
         struct S8W
         {
-            public S8 s8;
+            public S8 s8InW;
         }
 
         struct S8WW
         {
-            public S8W s8;
+            public S8W s8InWW;
         }
 
         struct S8Copy
@@ -534,15 +534,15 @@ namespace TestStructFields
         {
             S8 s1 = new S8();
             S8W s2 = new S8W();
-            s2.s8.i1 = 1;
-            s2.s8.i2 = 2;
+            s2.s8InW.i1 = 1;
+            s2.s8InW.i2 = 2;
             if (s1.i1 != 0)
             {
                 return 101;
             }
-            s1 = s2.s8;
-            s2.s8.i1 = 3;
-            s2.s8.i2 = 4;
+            s1 = s2.s8InW;
+            s2.s8InW.i1 = 3;
+            s2.s8InW.i2 = 4;
 
             if (s1.i1 != 1)
             {
@@ -552,11 +552,11 @@ namespace TestStructFields
             {
                 return 101;
             }
-            if (s2.s8.i1 != 3)
+            if (s2.s8InW.i1 != 3)
             {
                 return 101;
             }
-            if (s2.s8.i2 != 4)
+            if (s2.s8InW.i2 != 4)
             {
                 return 101;
             }
@@ -570,22 +570,22 @@ namespace TestStructFields
             S8 s2 = new S8();
             s2.i1 = 1;
             s2.i2 = 2;
-            if (s1.s8.i1 != 0)
+            if (s1.s8InW.i1 != 0)
             {
                 return 101;
             }
-            if (s1.s8.i2 != 0)
+            if (s1.s8InW.i2 != 0)
             {
                 return 101;
             }
-            s1.s8 = s2;
+            s1.s8InW = s2;
             s2.i1 = 3;
             s2.i2 = 4;
-            if (s1.s8.i1 != 1)
+            if (s1.s8InW.i1 != 1)
             {
                 return 101;
             }
-            if (s1.s8.i2 != 2)
+            if (s1.s8InW.i2 != 2)
             {
                 return 101;
             }
@@ -605,32 +605,14 @@ namespace TestStructFields
         {
             S8 s1 = new S8();
             S8WW s2 = new S8WW();
-            s2.s8.s8.i1 = 1;
-            s2.s8.s8.i2 = 2;
-            if (s1.i1 != 0)
-            {
-                return 101;
-            }
-            if (s1.i2 != 0)
-            {
-                return 101;
-            }
-            s1 = s2.s8.s8;
-            s2.s8.s8.i1 = 3;
-            s2.s8.s8.i2 = 4;
+            s2.s8InWW.s8InW.i1 = 1;
+            s2.s8InWW.s8InW.i2 = 2;
+            s1 = s2.s8InWW.s8InW;
             if (s1.i1 != 1)
             {
                 return 101;
             }
             if (s1.i2 != 2)
-            {
-                return 101;
-            }
-            if (s2.s8.s8.i1 != 3)
-            {
-                return 101;
-            }
-            if (s2.s8.s8.i2 != 4)
             {
                 return 101;
             }
@@ -644,22 +626,22 @@ namespace TestStructFields
             S8 s2 = new S8();
             s2.i1 = 1;
             s2.i2 = 2;
-            if (s1.s8.s8.i1 != 0)
+            if (s1.s8InWW.s8InW.i1 != 0)
             {
                 return 101;
             }
-            if (s1.s8.s8.i2 != 0)
+            if (s1.s8InWW.s8InW.i2 != 0)
             {
                 return 101;
             }
-            s1.s8.s8 = s2;
+            s1.s8InWW.s8InW = s2;
             s2.i1 = 3;
             s2.i2 = 4;
-            if (s1.s8.s8.i1 != 1)
+            if (s1.s8InWW.s8InW.i1 != 1)
             {
                 return 101;
             }
-            if (s1.s8.s8.i2 != 2)
+            if (s1.s8InWW.s8InW.i2 != 2)
             {
                 return 101;
             }
