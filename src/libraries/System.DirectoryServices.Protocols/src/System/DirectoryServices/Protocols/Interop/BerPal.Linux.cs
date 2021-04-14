@@ -13,13 +13,15 @@ namespace System.DirectoryServices.Protocols
 
         internal static int FlattenBerElement(SafeBerHandle berElement, ref IntPtr flattenptr) => Interop.Ldap.ber_flatten(berElement, ref flattenptr);
 
-        internal static int PrintBerArray(SafeBerHandle berElement, string format, IntPtr value) => Interop.Ldap.ber_printf_berarray(berElement, format, value);
+        internal static int PrintBerArray(SafeBerHandle berElement, string format, IntPtr value, int tag) => Interop.Ldap.ber_printf_berarray(berElement, format, value, tag);
 
-        internal static int PrintByteArray(SafeBerHandle berElement, string format, HGlobalMemHandle value, int length) => Interop.Ldap.ber_printf_bytearray(berElement, format, value, length);
+        internal static int PrintByteArray(SafeBerHandle berElement, string format, HGlobalMemHandle value, int length, int tag) => Interop.Ldap.ber_printf_bytearray(berElement, format, value, length, tag);
 
-        internal static int PrintEmptyArgument(SafeBerHandle berElement, string format) => Interop.Ldap.ber_printf_emptyarg(berElement, format);
+        internal static int PrintEmptyArgument(SafeBerHandle berElement, string format, int tag) => Interop.Ldap.ber_printf_emptyarg(berElement, format, tag);
 
-        internal static int PrintInt(SafeBerHandle berElement, string format, int value) => Interop.Ldap.ber_printf_int(berElement, format, value);
+        internal static int PrintInt(SafeBerHandle berElement, string format, int value, int tag) => Interop.Ldap.ber_printf_int(berElement, format, value, tag);
+
+        internal static int PrintTag(SafeBerHandle berElement, string format, int tag) => Interop.Ldap.ber_printf_emptyarg(berElement, string format, tag);
 
         internal static int ScanNext(SafeBerHandle berElement, string format) => Interop.Ldap.ber_scanf_emptyarg(berElement, format);
 
