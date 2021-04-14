@@ -21,7 +21,7 @@ namespace System.DirectoryServices.Protocols
 
         internal static int PrintInt(SafeBerHandle berElement, string format, int value, int tag) => Interop.Ldap.ber_printf_int(berElement, format, value, tag);
 
-        internal static int PrintTag(SafeBerHandle berElement, string format, int tag) => Interop.Ldap.ber_printf_emptyarg(berElement, string format, tag);
+        internal static int PrintTag(SafeBerHandle berElement, string format, int tag) => Interop.Ldap.ber_printf_emptyarg(berElement, format, tag);
 
         internal static int ScanNext(SafeBerHandle berElement, string format) => Interop.Ldap.ber_scanf_emptyarg(berElement, format);
 
