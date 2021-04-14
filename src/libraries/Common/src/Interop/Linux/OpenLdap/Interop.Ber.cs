@@ -94,16 +94,16 @@ internal static partial class Interop
         {
             if (format == "i")
             {
-                return ber_get_int(berElement, value);
+                return ber_get_int(berElement, ref value);
             }
             else if (format == "e")
             {
-                return ber_get_enum(berElement, value);
+                return ber_get_enum(berElement, ref value);
             }
             else
             {
                 Debug.Assert(format == "b");
-                return ber_get_boolean(berElement, value);
+                return ber_get_boolean(berElement, ref value);
             }
         }
 
@@ -119,7 +119,7 @@ internal static partial class Interop
         public static int ber_scanf_bitstring(SafeBerHandle berElement, string format, ref IntPtr value, ref int bitLength)
         {
             Debug.Assert(format == "B");
-            return ber_get_stringb(berElement, value, bitLength);
+            return ber_get_stringb(berElement, ref value, ref bitLength);
         }
 
         [DllImport(Libraries.OpenLdap, EntryPoint = "ber_get_stringb", CharSet = CharSet.Ansi)]
@@ -128,7 +128,7 @@ internal static partial class Interop
         public static int ber_scanf_ptr(SafeBerHandle berElement, string format, ref IntPtr value)
         {
             Debug.Assert(format == "O");
-            return ber_get_stringal(berElement, value);
+            return ber_get_stringal(berElement, ref value);
         }
 
         [DllImport(Libraries.OpenLdap, EntryPoint = "ber_get_stringal", CharSet = CharSet.Ansi)]
