@@ -4,6 +4,7 @@
 using System;
 using System.Runtime.InteropServices;
 using System.DirectoryServices.Protocols;
+using System.Diagnostics;
 
 internal static partial class Interop
 {
@@ -18,17 +19,58 @@ internal static partial class Interop
         [DllImport(Libraries.OpenLdap, EntryPoint = "ber_free", CharSet = CharSet.Ansi)]
         public static extern IntPtr ber_free([In] IntPtr berelement, int option);
 
-        [DllImport(Libraries.OpenLdap, EntryPoint = "ber_printf", CharSet = CharSet.Ansi)]
-        public static extern int ber_printf_emptyarg(SafeBerHandle berElement, string format);
+        public static int ber_printf_emptyarg(SafeBerHandle berElement, string format)
+        {
+            Debug.Assert(format == "{" || format == "}" || format == "[" || format == "]" || format == "n");
+            return ber_put_null(berElement);
+        }
 
-        [DllImport(Libraries.OpenLdap, EntryPoint = "ber_printf", CharSet = CharSet.Ansi)]
-        public static extern int ber_printf_int(SafeBerHandle berElement, string format, int value);
+        [DllImport(Libraries.OpenLdap, EntryPoint = "ber_put_null", CharSet = CharSet.Ansi)]
+        public static extern int ber_put_null(SafeBerHandle berElement);
 
-        [DllImport(Libraries.OpenLdap, EntryPoint = "ber_printf", CharSet = CharSet.Ansi)]
-        public static extern int ber_printf_bytearray(SafeBerHandle berElement, string format, HGlobalMemHandle value, int length);
+        public static int ber_printf_int(SafeBerHandle berElement, string format, int value)
+        {
+            if (format == "i")
+            {
+                return ber_put_int(berElement, value);
+            }
+            else if (format == "e")
+            {
+                return ber_put_enum(berElement, value);
+            }
+            else
+            {
+                Debug.Assert(format == "b");
+                return ber_put_boolean(berElement, value);
+            }
+        }
 
-        [DllImport(Libraries.OpenLdap, EntryPoint = "ber_printf", CharSet = CharSet.Ansi)]
-        public static extern int ber_printf_berarray(SafeBerHandle berElement, string format, IntPtr value);
+        [DllImport(Libraries.OpenLdap, EntryPoint = "ber_put_int", CharSet = CharSet.Ansi)]
+        public static extern int ber_put_int(SafeBerHandle berElement, int value);
+
+        [DllImport(Libraries.OpenLdap, EntryPoint = "ber_put_enum", CharSet = CharSet.Ansi)]
+        public static extern int ber_put_enum(SafeBerHandle berElement, int value);
+
+        [DllImport(Libraries.OpenLdap, EntryPoint = "ber_put_boolean", CharSet = CharSet.Ansi)]
+        public static extern int ber_put_boolean(SafeBerHandle berElement, int value);
+
+        public static int ber_printf_bytearray(SafeBerHandle berElement, string format, HGlobalMemHandle value, int length)
+        {
+            Debug.Assert(format == "o");
+            return ber_put_ostring(berElement, value, length);
+        }
+
+        [DllImport(Libraries.OpenLdap, EntryPoint = "ber_put_ostring", CharSet = CharSet.Ansi)]
+        private static extern int ber_put_ostring(SafeBerHandle berElement, HGlobalMemHandle value, int length);
+
+        public static int ber_printf_berarray(SafeBerHandle berElement, string format, IntPtr value)
+        {
+            Debug.Assert(format == "V");
+            return ber_put_string(berElement, value);
+        }
+
+        [DllImport(Libraries.OpenLdap, EntryPoint = "ber_put_string", CharSet = CharSet.Ansi)]
+        private static extern int ber_put_string(SafeBerHandle berElement, IntPtr value);
 
         [DllImport(Libraries.OpenLdap, EntryPoint = "ber_flatten", CharSet = CharSet.Ansi)]
         public static extern int ber_flatten(SafeBerHandle berElement, ref IntPtr value);
@@ -39,16 +81,57 @@ internal static partial class Interop
         [DllImport(Libraries.OpenLdap, EntryPoint = "ber_bvecfree", CharSet = CharSet.Ansi)]
         public static extern int ber_bvecfree(IntPtr value);
 
-        [DllImport(Libraries.OpenLdap, EntryPoint = "ber_scanf", CharSet = CharSet.Ansi)]
-        public static extern int ber_scanf(SafeBerHandle berElement, string format);
+        public static int ber_scanf_emptyarg(SafeBerHandle berElement, string format)
+        {
+            Debug.Assert(format == "{" || format == "}" || format == "[" || format == "]" || format == "n" || format == "x");
+            return ber_get_null(berElement);
+        }
 
-        [DllImport(Libraries.OpenLdap, EntryPoint = "ber_scanf", CharSet = CharSet.Ansi)]
-        public static extern int ber_scanf_int(SafeBerHandle berElement, string format, ref int value);
+        [DllImport(Libraries.OpenLdap, EntryPoint = "ber_get_null", CharSet = CharSet.Ansi)]
+        private static extern int ber_get_null(SafeBerHandle berElement);
 
-        [DllImport(Libraries.OpenLdap, EntryPoint = "ber_scanf", CharSet = CharSet.Ansi)]
-        public static extern int ber_scanf_bitstring(SafeBerHandle berElement, string format, ref IntPtr value, ref int bitLength);
+        public static int ber_scanf_int(SafeBerHandle berElement, string format, ref int value)
+        {
+            if (format == "i")
+            {
+                return ber_get_int(berElement, value);
+            }
+            else if (format == "e")
+            {
+                return ber_get_enum(berElement, value);
+            }
+            else
+            {
+                Debug.Assert(format == "b");
+                return ber_get_boolean(berElement, value);
+            }
+        }
 
-        [DllImport(Libraries.OpenLdap, EntryPoint = "ber_scanf", CharSet = CharSet.Ansi)]
-        public static extern int ber_scanf_ptr(SafeBerHandle berElement, string format, ref IntPtr value);
+        [DllImport(Libraries.OpenLdap, EntryPoint = "ber_get_int", CharSet = CharSet.Ansi)]
+        private static extern int ber_get_int(SafeBerHandle berElement, ref int value);
+
+        [DllImport(Libraries.OpenLdap, EntryPoint = "ber_get_enum", CharSet = CharSet.Ansi)]
+        private static extern int ber_get_enum(SafeBerHandle berElement, ref int value);
+
+        [DllImport(Libraries.OpenLdap, EntryPoint = "ber_get_boolean", CharSet = CharSet.Ansi)]
+        private static extern int ber_get_boolean(SafeBerHandle berElement, ref int value);
+
+        public static int ber_scanf_bitstring(SafeBerHandle berElement, string format, ref IntPtr value, ref int bitLength)
+        {
+            Debug.Assert(format == "B");
+            return ber_get_stringb(berElement, value, bitLength);
+        }
+
+        [DllImport(Libraries.OpenLdap, EntryPoint = "ber_get_stringb", CharSet = CharSet.Ansi)]
+        private static extern int ber_get_stringb(SafeBerHandle berElement, ref IntPtr value, ref int bitLength);
+
+        public static int ber_scanf_ptr(SafeBerHandle berElement, string format, ref IntPtr value)
+        {
+            Debug.Assert(format == "O");
+            return ber_get_stringal(berElement, value);
+        }
+
+        [DllImport(Libraries.OpenLdap, EntryPoint = "ber_get_stringal", CharSet = CharSet.Ansi)]
+        private static extern int ber_get_stringal(SafeBerHandle berElement, ref IntPtr value);
     }
 }
