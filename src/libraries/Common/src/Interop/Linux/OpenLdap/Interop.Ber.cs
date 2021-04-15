@@ -106,8 +106,7 @@ internal static partial class Interop
             else
             {
                 Debug.Assert(format == "X");
-                Debug.Assert(length == 0);
-                return ber_put_bitstring(berElement, value, tag);
+                return ber_put_bitstring(berElement, value, length, tag);
             }
         }
 
