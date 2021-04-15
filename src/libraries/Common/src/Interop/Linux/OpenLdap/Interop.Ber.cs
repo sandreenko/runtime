@@ -117,7 +117,7 @@ internal static partial class Interop
         private static extern int ber_put_string(SafeBerHandle berElement, HGlobalMemHandle value, int tag);
 
         [DllImport(Libraries.OpenLdap, EntryPoint = "ber_put_bitstring", CharSet = CharSet.Ansi)]
-        private static extern int ber_put_bitstring(SafeBerHandle berElement, HGlobalMemHandle value, int tag);
+        private static extern int ber_put_bitstring(SafeBerHandle berElement, HGlobalMemHandle value, int length, int tag);
 
         [DllImport(Libraries.OpenLdap, EntryPoint = "ber_flatten", CharSet = CharSet.Ansi)]
         public static extern int ber_flatten(SafeBerHandle berElement, ref IntPtr value);
