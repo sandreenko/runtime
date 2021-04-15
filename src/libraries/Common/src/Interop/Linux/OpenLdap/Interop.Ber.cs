@@ -61,6 +61,12 @@ internal static partial class Interop
         [DllImport(Libraries.OpenLdap, EntryPoint = "ber_put_null", CharSet = CharSet.Ansi)]
         public static extern int ber_put_null(SafeBerHandle berElement, int tag);
 
+
+        public static int ber_printf_tag(SafeBerHandle berElement, string format, int tag)
+        {
+            return 0;
+        }
+
         public static int ber_printf_int(SafeBerHandle berElement, string format, int value, int tag)
         {
             if (format == "i")
