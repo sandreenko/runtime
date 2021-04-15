@@ -10,7 +10,7 @@ internal static partial class Interop
 {
     internal static partial class Ldap
     {
-        private static const int ber_default_successful_return_code = 0;
+        private const int ber_default_successful_return_code = 0;
 
         [DllImport(Libraries.OpenLdap, EntryPoint = "ber_alloc_t", CharSet = CharSet.Ansi)]
         public static extern IntPtr ber_alloc(int option);
