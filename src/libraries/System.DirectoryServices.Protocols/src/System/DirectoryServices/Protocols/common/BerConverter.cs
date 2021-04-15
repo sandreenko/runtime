@@ -178,11 +178,13 @@ namespace System.DirectoryServices.Protocols
                             {
                                 tempValues[i] = utf8Encoder.GetBytes(s);
                             }
+                            error = EncodingByteArrayHelper(berElement, tempValues[i], 'o', tag);
+                            if (error == -1)
+                            {
+                                break;
+                            }
                         }
                     }
-
-                    error = EncodingMultiByteArrayHelper(berElement, tempValues, 'V', tag);
-
                     valueCount++;
                 }
                 else if (fmt == 'V')
@@ -204,8 +206,14 @@ namespace System.DirectoryServices.Protocols
                     }
 
                     byte[][] tempValue = (byte[][])value[valueCount];
-
-                    error = EncodingMultiByteArrayHelper(berElement, tempValue, fmt, tag);
+                    for (int i = 0; i < tempValue.Length; i++)
+                    {
+                        error = EncodingByteArrayHelper(berElement, tempValue[i], 'o', tag);
+                        if (error == -1)
+                        {
+                            break;
+                        }
+                    }
 
                     valueCount++;
                 }
@@ -514,77 +522,6 @@ namespace System.DirectoryServices.Protocols
             }
 
             return byteArray;
-        }
-
-        private static int EncodingMultiByteArrayHelper(SafeBerHandle berElement, byte[][] tempValue, char fmt, int tag)
-        {
-            IntPtr berValArray = IntPtr.Zero;
-            IntPtr tempPtr = IntPtr.Zero;
-            berval[] managedBervalArray = null;
-            int error = 0;
-
-            try
-            {
-                if (tempValue != null)
-                {
-                    int i = 0;
-                    berValArray = Utility.AllocHGlobalIntPtrArray(tempValue.Length + 1);
-                    int structSize = Marshal.SizeOf(typeof(berval));
-                    managedBervalArray = new berval[tempValue.Length];
-
-                    for (i = 0; i < tempValue.Length; i++)
-                    {
-                        byte[] byteArray = tempValue[i];
-
-                        // construct the managed berval
-                        managedBervalArray[i] = new berval();
-
-                        if (byteArray != null)
-                        {
-                            managedBervalArray[i].bv_len = byteArray.Length;
-                            managedBervalArray[i].bv_val = Marshal.AllocHGlobal(byteArray.Length);
-                            Marshal.Copy(byteArray, 0, managedBervalArray[i].bv_val, byteArray.Length);
-                        }
-
-                        // allocate memory for the unmanaged structure
-                        IntPtr valPtr = Marshal.AllocHGlobal(structSize);
-                        Marshal.StructureToPtr(managedBervalArray[i], valPtr, false);
-
-                        tempPtr = (IntPtr)((long)berValArray + IntPtr.Size * i);
-                        Marshal.WriteIntPtr(tempPtr, valPtr);
-                    }
-
-                    tempPtr = (IntPtr)((long)berValArray + IntPtr.Size * i);
-                    Marshal.WriteIntPtr(tempPtr, IntPtr.Zero);
-                }
-
-                error = BerPal.PrintBerArray(berElement, new string(fmt, 1), berValArray, tag);
-            }
-            finally
-            {
-                if (berValArray != IntPtr.Zero)
-                {
-                    for (int i = 0; i < tempValue.Length; i++)
-                    {
-                        IntPtr ptr = Marshal.ReadIntPtr(berValArray, IntPtr.Size * i);
-                        if (ptr != IntPtr.Zero)
-                            Marshal.FreeHGlobal(ptr);
-                    }
-                    Marshal.FreeHGlobal(berValArray);
-                }
-                if (managedBervalArray != null)
-                {
-                    foreach (berval managedBerval in managedBervalArray)
-                    {
-                        if (managedBerval.bv_val != IntPtr.Zero)
-                        {
-                            Marshal.FreeHGlobal(managedBerval.bv_val);
-                        }
-                    }
-                }
-            }
-
-            return error;
         }
 
         private static byte[][] DecodingMultiByteArrayHelper(SafeBerHandle berElement, char fmt, ref int error)
