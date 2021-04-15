@@ -135,7 +135,6 @@ internal static partial class Interop
             Debug.Assert(format == "{" || format == "}" || format == "[" || format == "]" || format == "n" || format == "x");
             if (format == "{" || format == "[")
             {
-                //return ber_scanf(berElement, format);
                 int len = 0;
                 return ber_skip_tag(berElement, ref len);
             }
@@ -149,11 +148,6 @@ internal static partial class Interop
                 return ber_get_null(berElement);
             }
         }
-
-
-        [DllImport(Libraries.OpenLdap, EntryPoint = "ber_scanf", CharSet = CharSet.Ansi)]
-        public static extern int ber_scanf(SafeBerHandle berElement, string format);
-
 
         [DllImport(Libraries.OpenLdap, EntryPoint = "ber_skip_tag", CharSet = CharSet.Ansi)]
         private static extern int ber_skip_tag(SafeBerHandle berElement, ref int len);
