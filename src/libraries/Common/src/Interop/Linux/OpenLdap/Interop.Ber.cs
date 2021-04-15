@@ -135,9 +135,9 @@ internal static partial class Interop
             Debug.Assert(format == "{" || format == "}" || format == "[" || format == "]" || format == "n" || format == "x");
             if (format == "{" || format == "[")
             {
-                return ber_scanf(berElement, format);
-                //int len = 0;
-                //return ber_skip_tag(berElement, ref len);
+                //return ber_scanf(berElement, format);
+                int len = 0;
+                return ber_skip_tag(berElement, ref len);
             }
             else if (format == "]" || format == "}")
             {
