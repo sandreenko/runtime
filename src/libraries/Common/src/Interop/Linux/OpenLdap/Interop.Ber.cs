@@ -94,7 +94,7 @@ internal static partial class Interop
                 return ber_put_ostring(berElement, value, length, tag);
             }
             else if (format == "s")
-            {                
+            {
                 return ber_put_string(berElement, value, tag);
             }
             else
@@ -136,11 +136,11 @@ internal static partial class Interop
                 // Do nothing, but we need a return code, so get null.
                 return ber_get_null(berElement);
             }
-            else 
+            else
             {
                 Debug.Assert(format == "n" || format == "x");
                 return ber_get_null(berElement);
-            }            
+            }
         }
 
         [DllImport(Libraries.OpenLdap, EntryPoint = "ber_skip_tag", CharSet = CharSet.Ansi)]
