@@ -29,6 +29,10 @@ namespace System.DirectoryServices.Protocols.Tests
             yield return new object[] { "[]", new object[] { "a" }, (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) ? new byte[] { 49, 132, 0, 0, 0, 0 } : new byte[] { 49, 0 } };
             yield return new object[] { "n", new object[] { "a" }, new byte[] { 5, 0 } };
 
+            yield return new object[] { "e", new object[] { 128 }, new byte[] { 10, 2, 0, 128 } };
+            yield return new object[] { "te", new object[] { 128, 0 }, new byte[] { 128, 1, 0 } };
+            yield return new object[] { "tet", new object[] { 128, 0, 133 }, new byte[] { 128, 1, 0 } };
+
             yield return new object[] { "tetie", new object[] { 128, 0, 133, 2, 3 }, new byte[] { 128, 1, 0, 133, 1, 2, 10, 1, 3 } };
             yield return new object[] { "{tetie}", new object[] { 128, 0, 133, 2, 3 }, (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) ? new byte[] { 48, 132, 0, 0, 0, 9, 128, 1, 0, 133, 1, 2, 10, 1, 3 } : new byte[] { 48, 9, 128, 1, 0, 133, 1, 2, 10, 1, 3 } };
 
