@@ -141,7 +141,7 @@ internal static partial class Interop
             }
             else if (format == "]" || format == "}")
             {
-                return ber_default_successful_return_code
+                return ber_default_successful_return_code;
             }
             else
             {
