@@ -199,6 +199,13 @@ internal static partial class Interop
         [DllImport(Libraries.OpenLdap, EntryPoint = "ber_get_stringal", CharSet = CharSet.Ansi)]
         private static extern int ber_get_stringal(SafeBerHandle berElement, ref IntPtr value);
 
+        public static int ber_printf_berarray(SafeBerHandle berElement, string format, IntPtr value, int tag)
+        {
+            Debug.Assert(format == "v" || format == "V");
+            // V and v are not supported on Unix yet.
+            return -1;
+        }
+
         public static int ber_scanf_multibytearray(SafeBerHandle berElement, string format, ref IntPtr value)
         {
             Debug.Assert(format == "v" || format == "V");
