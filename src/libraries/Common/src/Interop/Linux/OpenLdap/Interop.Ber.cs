@@ -10,6 +10,8 @@ internal static partial class Interop
 {
     internal static partial class Ldap
     {
+        private static const ber_default_successful_return_code = 0;
+
         [DllImport(Libraries.OpenLdap, EntryPoint = "ber_alloc_t", CharSet = CharSet.Ansi)]
         public static extern IntPtr ber_alloc(int option);
 
@@ -64,7 +66,7 @@ internal static partial class Interop
 
         public static int ber_printf_tag(SafeBerHandle berElement, string format, int tag)
         {
-            return 0;
+            return ber_default_successful_return_code;
         }
 
         public static int ber_printf_int(SafeBerHandle berElement, string format, int value, int tag)
@@ -133,13 +135,13 @@ internal static partial class Interop
             Debug.Assert(format == "{" || format == "}" || format == "[" || format == "]" || format == "n" || format == "x");
             if (format == "{" || format == "[")
             {
-                int len = 0;
-                return ber_skip_tag(berElement, ref len);
+                ber_scanf(berElement, format);
+                //int len = 0;
+                //return ber_skip_tag(berElement, ref len);
             }
             else if (format == "]" || format == "}")
             {
-                // Do nothing, but we need a return code, so get null.
-                return ber_get_null(berElement);
+                return ber_default_successful_return_code
             }
             else
             {
@@ -147,6 +149,11 @@ internal static partial class Interop
                 return ber_get_null(berElement);
             }
         }
+
+
+        [DllImport(Libraries.OpenLdap, EntryPoint = "ber_scanf", CharSet = CharSet.Ansi)]
+        public static extern int ber_scanf(SafeBerHandle berElement, string format);
+
 
         [DllImport(Libraries.OpenLdap, EntryPoint = "ber_skip_tag", CharSet = CharSet.Ansi)]
         private static extern int ber_skip_tag(SafeBerHandle berElement, ref int len);
