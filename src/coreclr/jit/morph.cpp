@@ -10798,8 +10798,6 @@ GenTree* Compiler::fgMorphBlockOperand(GenTree* tree, var_types asgType, unsigne
             {
                 // This may be a lclVar that was determined to be address-exposed.
                 effectiveVal->gtFlags |= (lclNode->gtFlags & GTF_ALL_EFFECT);
-                // TODO-1stClassStructs: get rid of IND(ADDR()).
-                lvaSetVarDoNotEnregister(lclNum DEBUGARG(DNER_BlockOp));
             }
         }
         if (needsIndirection)
@@ -11759,7 +11757,7 @@ GenTree* Compiler::fgMorphCopyBlock(GenTree* tree)
                                 srcLclVarTree->gtFlags |= GTF_VAR_CAST;
                                 srcLclVarTree->ChangeOper(GT_LCL_FLD);
                                 // TODO-1stClassStructs: delete this pessimization.
-                                lvaSetVarDoNotEnregister(srcLclNum DEBUGARG(DNER_BlockOp));
+                                lvaSetVarDoNotEnregister(srcLclNum DEBUGARG(DNER_LocalField));
                                 srcLclVarTree->gtType = destType;
                                 srcLclVarTree->AsLclFld()->SetFieldSeq(curFieldSeq);
                                 srcFld = srcLclVarTree;
