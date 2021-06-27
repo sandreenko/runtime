@@ -2114,7 +2114,7 @@ bool Compiler::StructPromotionHelper::ShouldPromoteStructVar(unsigned lclNum)
         JITDUMP("Not promoting promotable struct local V%02u, because of STRESS_PROMOTE_FEWER_STRUCTS\n", lclNum);
         shouldPromote = false;
     }
-#endif
+#endif // DEBUG
 
     //
     // If the lvRefCnt is zero and we have a struct promoted parameter we can end up with an extra store of
@@ -7324,6 +7324,18 @@ void Compiler::lvaDumpEntry(unsigned lclNum, FrameLayoutState curState, size_t r
         }
 
         gtDispLclVar(lclNum);
+
+        if (varTypeIsStruct(type))
+        {
+            if (varDsc->lvRegStruct)
+            {
+                printf("a reg struct, ");
+            }
+            else
+            {
+                printf("not a reg struct, ");
+            }
+        }
 
         printf("[V%02u", lclNum);
         if (varDsc->lvTracked)

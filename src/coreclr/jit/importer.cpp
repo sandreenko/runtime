@@ -1831,9 +1831,16 @@ GenTree* Compiler::impNormStructVal(GenTree*             structVal,
 
         case GT_LCL_VAR:
         case GT_LCL_FLD:
+        {
             structLcl = structVal->AsLclVarCommon();
-            // Wrap it in a GT_OBJ.
-            structVal = gtNewObjNode(structHnd, gtNewOperNode(GT_ADDR, TYP_BYREF, structVal));
+            const LclVarDsc* lclVar = lvaGetDesc(structLcl);
+            ClassLayout* argLayout = typGetObjLayout(structHnd);
+            // Wrap it in a GT_OBJ, if needed.
+            if (forceNormalization || !ClassLayout::AreCompatible(lclVar->GetLayout(), argLayout))
+            {
+                structVal = gtNewObjNode(structHnd, gtNewOperNode(GT_ADDR, TYP_BYREF, structVal));
+            }
+        }
             FALLTHROUGH;
 
         case GT_OBJ:
@@ -1938,7 +1945,7 @@ GenTree* Compiler::impNormStructVal(GenTree*             structVal,
             structLcl = gtNewLclvNode(tmpNum, structType)->AsLclVarCommon();
             structVal = structLcl;
         }
-        if ((forceNormalization || (structType == TYP_STRUCT)) && !structVal->OperIsBlk())
+        if (forceNormalization && !structVal->OperIsBlk())
         {
             // Wrap it in a GT_OBJ
             structVal = gtNewObjNode(structHnd, gtNewOperNode(GT_ADDR, TYP_BYREF, structVal));
@@ -2788,7 +2795,7 @@ BasicBlock* Compiler::impPushCatchArgOnStack(BasicBlock* hndBlk, CORINFO_CLASS_H
 #if defined(JIT32_GCENCODER)
     const bool forceInsertNewBlock = isSingleBlockFilter || compStressCompile(STRESS_CATCH_ARG, 5);
 #else
-    const bool forceInsertNewBlock      = compStressCompile(STRESS_CATCH_ARG, 5);
+    const bool forceInsertNewBlock         = compStressCompile(STRESS_CATCH_ARG, 5);
 #endif // defined(JIT32_GCENCODER)
 
     /* Spill GT_CATCH_ARG to a temp if there are jumps to the beginning of the handler */
@@ -15571,6 +15578,15 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                     op1 = gtNewOperNode(GT_ADD, TYP_BYREF, op1,
                                         gtNewIconNode(OFFSETOF__CORINFO_TypedReference__type, TYP_I_IMPL));
                     op1 = gtNewOperNode(GT_IND, TYP_BYREF, op1);
+                }
+                else if (op1->IsLocal())
+                {
+                    GenTreeLclVarCommon* lclVar = op1->AsLclVarCommon();
+                    GenTree*             addr   = gtNewOperNode(GT_ADDR, TYP_BYREF, lclVar);
+                    GenTreeIntCon*       offset = gtNewIconNode(OFFSETOF__CORINFO_TypedReference__type, TYP_I_IMPL);
+                    GenTree*             add    = gtNewOperNode(GT_ADD, TYP_BYREF, addr, offset);
+                    GenTree*             ind    = gtNewOperNode(GT_IND, TYP_BYREF, add);
+                    op1                         = ind;
                 }
                 else
                 {

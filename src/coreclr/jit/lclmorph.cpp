@@ -539,7 +539,7 @@ public:
                             !m_compiler->lvaIsImplicitByRefLocal(lclVar->GetLclNum()))
                         {
                             LclVarDsc* varDsc = m_compiler->lvaGetDesc(lclNum);
-                            if (varDsc->lvFieldCnt > 1)
+                            if ((varDsc->lvFieldCnt > 1) && (!varDsc->lvRegStruct))
                             {
                                 m_compiler->lvaSetVarDoNotEnregister(lclNum DEBUGARG(Compiler::DNER_BlockOp));
                             }
@@ -991,13 +991,13 @@ private:
                 return;
             }
 
-            if ((user == nullptr) || !user->OperIs(GT_ASG))
-            {
-                // TODO-ADDR: Skip TYP_STRUCT indirs for now, unless they're used by an ASG.
-                // At least call args will require extra work because currently they must be
-                // wrapped in OBJ nodes so we can't replace those with local nodes.
-                return;
-            }
+            // if ((user == nullptr) || !user->OperIs(GT_ASG))
+            //{
+            //    // TODO-ADDR: Skip TYP_STRUCT indirs for now, unless they're used by an ASG.
+            //    // At least call args will require extra work because currently they must be
+            //    // wrapped in OBJ nodes so we can't replace those with local nodes.
+            //    return;
+            //}
 
             if (indir->OperIs(GT_FIELD))
             {
@@ -1158,7 +1158,15 @@ private:
 
                 case 1:
                 {
-                    keepSearching = node->OperIs(GT_ADDR);
+                    if (node->OperIs(GT_ADDR))
+                    {
+                        keepSearching = true;
+                    }
+                    else
+                    {
+                        isArgToCall   = node->IsCall();
+                        keepSearching = false;
+                    }
                 }
                 break;
 
