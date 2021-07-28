@@ -812,7 +812,7 @@ specified dynamically from the object being invoked. This is used, for example, 
 compile calls to “methods on `base`” (i.e., the statically known parent class) or to virtual static methods.
 
 ### III.3.19, conv.ovf.to type.un (page 354)
-(Edit 1nd Description paragraph:)
+(Edit 1st Description paragraph:)
 Convert the value on top of the stack to the type specified in the opcode, and leave that converted
 value on the top of the stack. If the value cannot be represented, an exception is thrown.
 
