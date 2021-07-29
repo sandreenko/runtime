@@ -876,6 +876,15 @@ namespace TestCasts
             GenerateTest<float, ulong>(int.MinValue, sourceOp, convOvfUn, ExpectException, 0);
             GenerateTest<float, ulong>(long.MinValue, sourceOp, convOvfUn, ExpectException, 0);
             GenerateTest<float, ulong>(Single.NaN, sourceOp, convOvfUn, ExpectException, 0);
+
+            TestSimple(long.MinValue, (float)long.MinValue);
+        }
+
+        public static void TestSimple(float f, object f1)
+        {
+            Console.WriteLine("Test Simple value is " + f + ", f1 is " + f1.ToString());
+
+
         }
 
         static void TestConvertFromDouble()
