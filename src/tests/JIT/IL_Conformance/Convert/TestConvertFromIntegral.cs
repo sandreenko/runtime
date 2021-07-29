@@ -32,6 +32,7 @@ namespace TestCasts
 
             Type[] args = new Type[] { }; // No args.
             Type returnType = typeof(T);
+            Console.WriteLine("Run test from " + typeof(F).FullName + ", value " + from.ToString() + " To " + typeof(T).FullName + "with Op " + convOpcode.Name + " exception expected: " + exceptionExpected);
             string name = "DynamicConvertFrom" + typeof(F).FullName + "To" + typeof(T).FullName + from.ToString() + "Op" + convOpcode.Name;
             DynamicMethod dm = new DynamicMethod(name, returnType, args);
 
