@@ -32,49 +32,35 @@ namespace TestCasts
             Debug.Assert(checkResult || expectedTo.Equals(default(T)));
 
             Type[] args = new Type[] { }; // No args.
-            Type returnType = typeof(T);
+            Type returnType = typeof(ulong);
             Console.WriteLine("Run test from " + typeof(F).FullName + ", value " + from.ToString() + " To " + typeof(T).FullName + "with Op " + convOpcode.Name + " exception expected: " + exceptionExpected);
             string name = "DynamicConvertFrom" + typeof(F).FullName + "To" + typeof(T).FullName + from.ToString() + "Op" + convOpcode.Name;
+
+
+            Console.WriteLine("Value before, before new dynamic " + from.ToString());
+
             DynamicMethod dm = new DynamicMethod(name, returnType, args);
+
+            Console.WriteLine("Value before, after new dynamic " + from.ToString()); 
 
             ILGenerator generator = dm.GetILGenerator();
 
-            //if (typeof(F) == typeof(int)) generator.Emit(fromOpcode, (int)(object)from);
-            //else if (typeof(F) == typeof(long)) generator.Emit(fromOpcode, (long)(object)from);
-            //else if (typeof(F) == typeof(nint)) generator.Emit(fromOpcode, (nint)(object)from);
-            //else 
             if (typeof(F) == typeof(float)) generator.Emit(fromOpcode, (float)(object)from);
-            //else if (typeof(F) == typeof(double)) generator.Emit(fromOpcode, (double)(object)from);
-            //else
-            //{
-            //    throw new NotSupportedException();
-            //}
+            
+            Console.WriteLine("Value before, after first emit " + from.ToString());  
 
             generator.Emit(convOpcode);
             generator.Emit(OpCodes.Ret);
 
             try
             {
+                Console.WriteLine("Value before, in try " + from.ToString());
                 T res = (T)dm.Invoke(null, BindingFlags.Default, null, new object[] { }, null);
-                if (exceptionExpected)
-                {
-                    failedCount++;
-                    Console.WriteLine("No exception in " + name);
-                }
-                if (checkResult && !expectedTo.Equals(res))
-                {
-                    failedCount++;
-                    Console.WriteLine("Wrong result in " + name);
-                }
             }
             catch
             {
-                if (!exceptionExpected)
-                {
-                    failedCount++;
-                    Console.WriteLine("Not expected exception in " + name);
-                }
             }
+            Console.WriteLine("Value after " + from.ToString());
         }
 
 
