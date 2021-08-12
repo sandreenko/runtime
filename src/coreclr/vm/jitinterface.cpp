@@ -11948,9 +11948,25 @@ uint32_t CEEJitInfo::getExpectedTargetArchitecture()
 
 bool CEEJitInfo::doesFieldBelongToClass(CORINFO_FIELD_HANDLE fldHnd, CORINFO_CLASS_HANDLE cls)
 {
-    LIMITED_METHOD_CONTRACT;
+    CONTRACTL {
+        THROWS;
+    GC_TRIGGERS;
+    MODE_PREEMPTIVE;
+    } CONTRACTL_END;
 
-    return true;
+    bool result;
+
+    JIT_TO_EE_TRANSITION();
+
+    FieldDesc* field = (FieldDesc*) fldHnd;
+    TypeHandle th(cls);
+
+    MethodTable* pMT = field->GetExactDeclaringType(th.GetMethodTable());
+    result = (pMT != nullptr);
+
+    EE_TO_JIT_TRANSITION();
+
+    return result;
 }
 
 void CEEInfo::JitProcessShutdownWork()
