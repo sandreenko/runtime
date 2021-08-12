@@ -210,7 +210,7 @@ class LocalAddressVisitor final : public GenTreeVisitor<LocalAddressVisitor>
         // Arguments:
         //    val - the input value
         //    field - the FIELD node that uses the input address value
-        //    fieldSeqStore - the compiler's field sequence store
+        //    compiler - the compiler instance
         //
         // Return Value:
         //    `true` if the value was consumed. `false` if the input value
@@ -224,8 +224,9 @@ class LocalAddressVisitor final : public GenTreeVisitor<LocalAddressVisitor>
         //     if the offset overflows then location is not representable, must escape
         //   - UNKNOWN => UNKNOWN
         //
-        bool Field(Value& val, GenTreeField* field, FieldSeqStore* fieldSeqStore)
+        bool Field(Value& val, GenTreeField* field, Compiler* compiler)
         {
+
             assert(!IsLocation() && !IsAddress());
 
             if (val.IsLocation())
@@ -246,13 +247,35 @@ class LocalAddressVisitor final : public GenTreeVisitor<LocalAddressVisitor>
                 m_lclNum = val.m_lclNum;
                 m_offset = newOffset.Value();
 
+
+                bool haveCorrectFieldForVN;
                 if (field->gtFldMayOverlap)
                 {
-                    m_fieldSeq = FieldSeqStore::NotAField();
+                    haveCorrectFieldForVN = false;
                 }
                 else
                 {
+                    LclVarDsc* varDsc = compiler->lvaGetDesc(m_lclNum);
+                    if (!varTypeIsStruct(varDsc))
+                    {
+                        haveCorrectFieldForVN = false;
+                    }
+                    else
+                    {
+                        CORINFO_CLASS_HANDLE clsHnd = varDsc->GetStructHnd();
+                        haveCorrectFieldForVN = compiler->info.compCompHnd->doesFieldBelongToClass(field->gtFldHnd, clsHnd);
+                    }
+                }
+
+                if (haveCorrectFieldForVN)
+                {
+                    FieldSeqStore* fieldSeqStore = compiler->GetFieldSeqStore();
                     m_fieldSeq = fieldSeqStore->Append(val.m_fieldSeq, fieldSeqStore->CreateSingleton(field->gtFldHnd));
+                }
+                else
+                {
+                    m_fieldSeq = FieldSeqStore::NotAField();
+                    JITDUMP("Setting NotAField for [%06u],\n", compiler->dspTreeID(field));
                 }
             }
 
@@ -463,7 +486,7 @@ public:
                     assert(TopValue(1).Node() == node);
                     assert(TopValue(0).Node() == node->AsField()->gtFldObj);
 
-                    if (!TopValue(1).Field(TopValue(0), node->AsField(), m_compiler->GetFieldSeqStore()))
+                    if (!TopValue(1).Field(TopValue(0), node->AsField(), m_compiler))
                     {
                         // Either the address comes from a location value (e.g. FIELD(IND(...)))
                         // or the field offset has overflowed.
