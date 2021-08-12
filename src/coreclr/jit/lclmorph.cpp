@@ -247,7 +247,6 @@ class LocalAddressVisitor final : public GenTreeVisitor<LocalAddressVisitor>
                 m_lclNum = val.m_lclNum;
                 m_offset = newOffset.Value();
 
-
                 bool haveCorrectFieldForVN;
                 if (field->gtFldMayOverlap)
                 {
@@ -260,10 +259,32 @@ class LocalAddressVisitor final : public GenTreeVisitor<LocalAddressVisitor>
                     {
                         haveCorrectFieldForVN = false;
                     }
-                    else
+                    else if (val.m_fieldSeq == nullptr)
                     {
                         CORINFO_CLASS_HANDLE clsHnd = varDsc->GetStructHnd();
-                        haveCorrectFieldForVN = compiler->info.compCompHnd->doesFieldBelongToClass(field->gtFldHnd, clsHnd);
+                        haveCorrectFieldForVN =
+                            compiler->info.compCompHnd->doesFieldBelongToClass(field->gtFldHnd, clsHnd);
+                    }
+                    else
+                    {
+                        FieldSeqNode* lastSeqNode = val.m_fieldSeq->GetTail();
+                        assert(lastSeqNode != nullptr);
+                        if (lastSeqNode->IsPseudoField() || lastSeqNode == FieldSeqStore::NotAField())
+                        {
+                            haveCorrectFieldForVN = false;
+                        }
+                        else
+                        {
+                            CORINFO_FIELD_HANDLE lastFieldBeforeTheCurrent = lastSeqNode->GetFieldHandle();
+
+                            CORINFO_CLASS_HANDLE clsHnd;
+                            CorInfoType          fieldCorType =
+                                compiler->info.compCompHnd->getFieldType(lastFieldBeforeTheCurrent, &clsHnd);
+                            assert(fieldCorType == CORINFO_TYPE_VALUECLASS);
+
+                            haveCorrectFieldForVN =
+                                compiler->info.compCompHnd->doesFieldBelongToClass(field->gtFldHnd, clsHnd);
+                        }
                     }
                 }
 
