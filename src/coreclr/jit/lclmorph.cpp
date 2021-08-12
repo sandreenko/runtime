@@ -262,6 +262,7 @@ class LocalAddressVisitor final : public GenTreeVisitor<LocalAddressVisitor>
                     else if (val.m_fieldSeq == nullptr)
                     {
                         CORINFO_CLASS_HANDLE clsHnd = varDsc->GetStructHnd();
+                        // If the answer is no we are probably accessing a canon type with a non-canon fldHnd.
                         haveCorrectFieldForVN =
                             compiler->info.compCompHnd->doesFieldBelongToClass(field->gtFldHnd, clsHnd);
                     }
@@ -280,10 +281,23 @@ class LocalAddressVisitor final : public GenTreeVisitor<LocalAddressVisitor>
                             CORINFO_CLASS_HANDLE clsHnd;
                             CorInfoType          fieldCorType =
                                 compiler->info.compCompHnd->getFieldType(lastFieldBeforeTheCurrent, &clsHnd);
-                            assert(fieldCorType == CORINFO_TYPE_VALUECLASS);
+                            if (fieldCorType != CORINFO_TYPE_VALUECLASS)
+                            {
+                                // For example, System.IntPtr:ToInt64, when inlined, creates trees like
+                                // *  FIELD     long   _value
+                                // \--*  ADDR      byref
+                                //    \--*  FIELD     long   Information
+                                //       \--*  ADDR      byref
+                                //          \--*  LCL_VAR   struct<Interop+NtDll+IO_STATUS_BLOCK, 16> V08 tmp7
+                                haveCorrectFieldForVN = false;
+                            }
+                            else
+                            {
 
-                            haveCorrectFieldForVN =
-                                compiler->info.compCompHnd->doesFieldBelongToClass(field->gtFldHnd, clsHnd);
+                                haveCorrectFieldForVN =
+                                    compiler->info.compCompHnd->doesFieldBelongToClass(field->gtFldHnd, clsHnd);
+                                assert(haveCorrectFieldForVN);
+                            }
                         }
                     }
                 }
