@@ -3531,6 +3531,11 @@ namespace Internal.JitInterface
             }
         }
 
+        private bool doesFieldBelongToClass(CORINFO_FIELD_STRUCT_* fld, CORINFO_CLASS_STRUCT_* cls)
+        {
+            return true;
+        }
+
         private bool isMethodDefinedInCoreLib()
         {
             TypeDesc owningType = MethodBeingCompiled.OwningType;

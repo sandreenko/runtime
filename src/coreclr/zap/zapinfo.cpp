@@ -3022,6 +3022,11 @@ uint32_t ZapInfo::getExpectedTargetArchitecture()
     return IMAGE_FILE_MACHINE_NATIVE;
 }
 
+bool ZapInfo::doesFieldBelongToClass(CORINFO_FIELD_HANDLE fld, CORINFO_CLASS_HANDLE cls)
+{
+    return m_pEEJitInfo->doesFieldBelongToClass(ftn, cls);
+}
+
 CORINFO_METHOD_HANDLE ZapInfo::GetDelegateCtor(CORINFO_METHOD_HANDLE   methHnd,
                                                CORINFO_CLASS_HANDLE    clsHnd,
                                                CORINFO_METHOD_HANDLE   targetMethodHnd,
