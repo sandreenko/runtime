@@ -7281,7 +7281,8 @@ void Compiler::fgValueNumberBlockAssignment(GenTree* tree)
                             // Use an unique value number for the old map, as we don't have information about
                             // the dst field values.
                             JITDUMP("    *** Different struct handles Dst/Src of COPYBLK\n");
-                            assert(ClassLayout::AreCompatible(rhsVarDsc->GetLayout(), lhsVarDsc->GetLayout()));
+                            assert(ClassLayout::AreCompatible(rhsVarDsc->GetLayout(), lhsVarDsc->GetLayout())
+                                || rhsVarDsc->lvAddrExposed || lhsVarDsc->lvAddrExposed);
                             isNewUniq = true;
                         }
                     }
