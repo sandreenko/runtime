@@ -7269,9 +7269,8 @@ void Compiler::fgValueNumberBlockAssignment(GenTree* tree)
                     isNewUniq = true;
                 }
 
-                if ((rhsVarDsc != nullptr) && (lhsVarDsc != nullptr))
+                if (!isNewUniq && (rhsVarDsc != nullptr) && (lhsVarDsc != nullptr))
                 {
-                    // If we are not asg one lcl to another then we rely on the previous mechanisms to deal with it.
                     if ((rhsFldSeq == nullptr) && (lhsFldSeq == nullptr))
                     {
                         if (rhsVarDsc->GetStructHnd() != lhsVarDsc->GetStructHnd())
@@ -7279,10 +7278,9 @@ void Compiler::fgValueNumberBlockAssignment(GenTree* tree)
                             // This can occur for nested structs or for unsafe casts, when we have IR like
                             // struct1 = struct2.
                             // Use an unique value number for the old map, as we don't have information about
-                            // the dst field values.
-                            JITDUMP("    *** Different struct handles Dst/Src of COPYBLK\n");
-                            assert(ClassLayout::AreCompatible(rhsVarDsc->GetLayout(), lhsVarDsc->GetLayout())
-                                || rhsVarDsc->lvAddrExposed || lhsVarDsc->lvAddrExposed);
+                            // the dst field values using dst FIELD_HANDLE.
+                            JITDUMP("    *** Different struct handles for Dst/Src of COPYBLK\n");
+                            assert(ClassLayout::AreCompatible(rhsVarDsc->GetLayout(), lhsVarDsc->GetLayout()));
                             isNewUniq = true;
                         }
                     }
